@@ -1,34 +1,43 @@
 """Example: one-max EA using the refactored prototype of ariel.ec module."""
 
-from typing import cast
-
-from rich.console import Console
-from rich.traceback import install
+NUM_OF_MODULES: int = 20
 
 from ariel.ec import (
     EA,
-    Crossover,
     EAOperation,
     Individual,
-    IntegerMutator,
-    IntegersGenerator,
     Population,
     config,
 )
+from ariel.ec.genotypes.tree import TreeGenome
+from ariel.ec.genotypes.tree.operators import (
+    random_tree,
+    crossover_subtree,
+    mutate_replace_node
+) 
 
-install()
-console = Console()
+from A1_template_2026 import (
+    fitness_function,
+    load_targets
+)
+
+targets = load_targets()
 
 def make_individual() -> Individual:
     ind = Individual()
-    ind.genotype = IntegersGenerator.integers(low=0, high=1, size=10)
+    treeGenome = random_tree(max_modules = NUM_OF_MODULES)
+    ind.genotype = treeGenome.to_dict()
+
     return ind
 
     #make a random tree generation
 
 def evaluate(population: Population) -> Population:
     for ind in population.unevaluated:
-        ind.fitness = float(sum(1 for gene in ind.genotype if gene == 1))
+        genome = TreeGenome.from_dict(ind.genotype)
+        body = genome.to_networkx()
+        ind.fitness = fitness_function(body, targets)
+
     return population
 
     #evaluate the population based on the tree_edit_distance 
