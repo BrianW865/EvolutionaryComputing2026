@@ -1,9 +1,11 @@
-# ──────────────────────────────────────────────── EA1 - Mutation operator:  mutate_replace_node ──────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────── EA1 - Crossover & Mutation operator ──────────────────────────────────────────────────────────────────────
 # Standard library
 import random
 from pathlib import Path
 from typing import Literal
-
+import numpy as np
+import matplotlib.pyplot as plt
+import json
 
 import mujoco as mj
 import networkx as nx
@@ -52,7 +54,7 @@ DATA.mkdir(parents=True, exist_ok=True)
 
 # --- EXPERIMENT CONSTANTS --- #
 TARGET_DIR: Path = HERE / "target_bodies"  # the bodies you must approach
-NUM_OF_MODULES: int = 10  # module budget per evolved body
+NUM_OF_MODULES: int = 20  # module budget per evolved body
 GENOTYPE: GenotypeTypes = "tree"  # "nde" | "tree" 
 MODE: ViewerTypes = "frame"  # see show_body() for the options
 SPAWN_POS: list[float] = [0.0, 0.0, 0.1]
@@ -137,7 +139,7 @@ def crossover(population: Population) -> Population:
 # This is the only deliberate difference between the two EA files!!
 # Everything else is held identical to isolate the effects of mutation operator.
 
-MUTATION_RATE: float = 0.2
+MUTATION_RATE: float = 0.3
 
 def mutate(population: Population) -> Population:
     # Only mutate the children we produced in crossover. Avoid mutating parents that exist in population.
@@ -211,12 +213,43 @@ def show_body(
             recorder = VideoRecorder(output_folder=str(DATA / "__videos__"))
             video_renderer(model, data, duration=5.0, video_recorder=recorder)
 
+# --- PLOTTING the results --- #
+def plotting(
+    histories_variant1: list[list[float]],
+) -> None:
+    """
+    Plots mean ± std of best fitness per generation, across independent runs.
+    """
+    history_array = np.array(histories_variant1)
+    mean_per_gen = history_array.mean(axis=0)
+    std_per_gen = history_array.std(axis=0)
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+    generations = np.arange(len(mean_per_gen))
 
-def main() -> None:
-    # population size held identical across both EA variants
-    config.target_population_size = 20
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    ax.plot(generations, mean_per_gen, label="EA Variant 1", color="blue")
+    ax.fill_between(
+        generations,
+        mean_per_gen - std_per_gen,
+        mean_per_gen + std_per_gen,
+        color="blue",
+        alpha=0.2,
+    )
+
+    ax.set_xlabel("Generation")
+    ax.set_ylabel("Best fitness (tree edit distance)")
+    ax.set_title("Convergence: EA Variant 1")
+    ax.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+# --- Run the EA for 5 different seeds --- #
+NUM_GENERATIONS: int = 100
+
+def run_ea(seed: int) -> list[float]:
+    random.seed(seed)
     initial = Population([make_individual() for _ in range(config.target_population_size)])
     initial = evaluate(initial)
 
@@ -228,20 +261,43 @@ def main() -> None:
         EAOperation(survivor_selection),
     ]
 
-    # is_maximisation=False is NEEDED: we minimize tree edit distance
-    # (lower = better). Leaving this at the framework default (True) 
-    # inverts best/worst in get_solution()!!!
-    ea = EA(initial, ops, num_steps=10, is_maximisation=False)
-    ea.run()
+    ea = EA(initial, ops, num_steps=NUM_GENERATIONS, is_maximisation=False)
 
-    console.log("--- Results ---")
+    history: list[float] = []
+    for gen in range(NUM_GENERATIONS):
+        ea.step()
+        best = ea.get_solution('best', only_alive=False)
+        history.append(best.fitness)
+
+    console.log(f"--- Results (seed={seed}) ---")
     console.log(f"best = {ea.get_solution('best', only_alive=False)}")
     console.log(f"median = {ea.get_solution('median', only_alive=False)}")
     console.log(f"worst = {ea.get_solution('worst', only_alive=False)}")
 
     best = ea.get_solution('best', only_alive=False)
     graph = TreeGenome.from_dict(best.genotype).to_networkx()
-    show_body(graph, MODE, file_name="best_individual")
+    show_body(graph, MODE, file_name=f"best_individual_seed{seed}")
+
+    ea.engine.dispose()  # release the DB connection so the next seed's EA can delete/recreate the file
+
+    return history
+
+# ─────────────────────────────────────────────── Main ──────────────────────────────────────────────────────────────────────
+
+def main() -> None:
+    config.target_population_size = 50
+
+    seeds = [42, 43, 44, 45, 46]
+    all_histories: list[list[float]] = []
+    for seed in seeds:
+        history = run_ea(seed)
+        all_histories.append(history)
+
+    # Save results so they can be combined with other variants later
+    with open(DATA / "histories_variant1.json", "w") as f:
+        json.dump(all_histories, f)
+
+    plotting(all_histories)
 
 if __name__ == "__main__":
     main()
