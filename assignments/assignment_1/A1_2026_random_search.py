@@ -76,11 +76,13 @@ def run_random_search(seed: int) -> list[float]:
 
     best_fitness: float = float("inf")
     history: list[float] = []
+    fitnesses: list[float] = []
 
     console.log(f"--- Starting run for seed {seed} ---")
 
     for i in range(REPETITIONS):
         fitness = random_search()
+        fitnesses.append(fitness)
 
         if fitness < best_fitness:
             best_fitness = fitness
@@ -90,8 +92,8 @@ def run_random_search(seed: int) -> list[float]:
 
     
     console.log(f"best fitness = {best_fitness}")
-    console.log(f"median = {statistics.median(history)}")
-    console.log(f"mean = {statistics.mean(history)}")
+    console.log(f"median = {statistics.median(fitnesses)}")
+    console.log(f"mean = {statistics.mean(fitnesses)}")
     console.log("--- Run ended ---")
 
     return history
