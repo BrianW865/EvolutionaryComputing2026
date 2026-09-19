@@ -1,7 +1,7 @@
 import random
 from pathlib import Path
 from typing import Literal
-
+import statistics
 
 import networkx as nx
 import numpy as np
@@ -17,10 +17,8 @@ from ariel.ec.genotypes.tree.operators import random_tree
 from tree_edit_distance import mean_plus_std_tree_edit_distance
 from ariel.ec.genotypes.tree.tree_genome import TreeGenome
 
-
 from ariel.ec import (
-    Individual,
-    Population
+    Individual
 )
 
 install()
@@ -36,8 +34,6 @@ DATA.mkdir(parents=True, exist_ok=True)
 # --- EXPERIMENT CONSTANTS --- #
 TARGET_DIR: Path = HERE / "target_bodies"  # the bodies you must approach
 NUM_OF_MODULES: int = 10  # module budget per evolved body
-GENOTYPE: GenotypeTypes = "tree"  # "nde" | "tree" 
-MODE: ViewerTypes = "frame"  # see show_body() for the options
 SPAWN_POS: list[float] = [0.0, 0.0, 0.1]
 
 NUM_OF_EVALUATIONS = 120
@@ -63,20 +59,36 @@ def make_individual() -> Individual:
     ind.genotype = random_tree(NUM_OF_MODULES).to_dict()
     return ind
 
-def random_search(seed: int, num_evaluations: int) -> Individual:
-    random.seed(seed)
-    np.random.seed(seed)
+def random_search():
+    console.log("hello")
+    ind = make_individual()
+    graph = TreeGenome.from_dict(ind.genotype).to_networkx()
+    ind.fitness = mean_plus_std_tree_edit_distance(graph, TARGETS)
 
-    best = None
+    return ind.fitness
+
+def main() -> None:
+    POPULATION_SIZE = 20
+    INITIAL_POPULATION = 20
+    AMOUNT_OF_GENERATIONS = 10
+    REPETITIONS = POPULATION_SIZE + (INITIAL_POPULATION * AMOUNT_OF_GENERATIONS)
+
     best_fitness = float("inf")
+    fitnesses = []
 
-    for _ in range(num_evaluations):
-        ind = make_individual()
-        graph = TreeGenome.from_dict(ind.genotype).to_networkx()
-        ind.fitness = mean_plus_std_tree_edit_distance(graph, TARGETS)
+    console.log("--- Starting run ---")
 
-        if ind.fitness < best_fitness:
-            best_fitness = ind.fitness
-            best = ind
+    for _ in range(REPETITIONS):
+        fitness = random_search()
+        fitnesses.append(fitness)
 
-    return best
+        if fitness < best_fitness:
+            best_fitness = fitness
+        
+        console.log(f"best = {best_fitness}")
+        console.log(f"mean = {statistics.mean(fitnesses)}")
+    
+    console.log("--- Run ended ---")
+
+if __name__ == "__main__":
+    main()
