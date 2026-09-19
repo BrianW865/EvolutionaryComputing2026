@@ -69,22 +69,25 @@ def random_search():
 
 def run_random_search(seed: int) -> list[float]:
     random.seed(seed)
-    POPULATION_SIZE = 20
-    INITIAL_POPULATION = 20
-    AMOUNT_OF_GENERATIONS = 10
-    REPETITIONS = POPULATION_SIZE + (INITIAL_POPULATION * AMOUNT_OF_GENERATIONS)
+    POPULATION_SIZE = 50
+    INITIAL_POPULATION = 50
+    AMOUNT_OF_GENERATIONS = 100
+    REPETITIONS = INITIAL_POPULATION + (POPULATION_SIZE * AMOUNT_OF_GENERATIONS)
 
-    best_fitness = float("inf")
+    best_fitness: float = float("inf")
     history: list[float] = []
 
     console.log(f"--- Starting run for seed {seed} ---")
 
-    for _ in range(REPETITIONS):
+    for i in range(REPETITIONS):
         fitness = random_search()
-        history.append(fitness)
 
         if fitness < best_fitness:
             best_fitness = fitness
+
+        if (i+1) % 50 == 0:
+            history.append(best_fitness)
+
     
     console.log(f"best fitness = {best_fitness}")
     console.log(f"median = {statistics.median(history)}")
@@ -94,11 +97,15 @@ def run_random_search(seed: int) -> list[float]:
     return history
 
 def main()-> None:
-    seeds = [42, 42, 44, 45, 46]
+    seeds = [42, 43, 44, 45, 46]
     all_histories: list[list[float]] = []
 
     for seed in seeds:
         history = run_random_search(seed)
+        number = 0
+        for _ in history:
+            number += 1
+        console.log(f"Amount of numbers stored: {number}")
         all_histories.append(history)
 
     with open(DATA / "histories_random_search.json", "w") as f:
