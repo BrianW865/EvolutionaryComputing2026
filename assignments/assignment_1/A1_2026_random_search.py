@@ -2,6 +2,7 @@ import random
 from pathlib import Path
 from typing import Literal
 import statistics
+import json
 
 import networkx as nx
 import numpy as np
@@ -66,28 +67,42 @@ def random_search():
 
     return ind.fitness
 
-def main() -> None:
+def run_random_search(seed: int) -> list[float]:
+    random.seed(seed)
     POPULATION_SIZE = 20
     INITIAL_POPULATION = 20
     AMOUNT_OF_GENERATIONS = 10
     REPETITIONS = POPULATION_SIZE + (INITIAL_POPULATION * AMOUNT_OF_GENERATIONS)
 
     best_fitness = float("inf")
-    fitnesses = []
+    history: list[float] = []
 
-    console.log("--- Starting run ---")
+    console.log(f"--- Starting run for seed {seed} ---")
 
     for _ in range(REPETITIONS):
         fitness = random_search()
-        fitnesses.append(fitness)
+        history.append(fitness)
 
         if fitness < best_fitness:
             best_fitness = fitness
-        
-        console.log(f"best = {best_fitness}")
-        console.log(f"mean = {statistics.mean(fitnesses)}")
     
+    console.log(f"best fitness = {best_fitness}")
+    console.log(f"median = {statistics.median(history)}")
+    console.log(f"mean = {statistics.mean(history)}")
     console.log("--- Run ended ---")
+
+    return history
+
+def main()-> None:
+    seeds = [42, 42, 44, 45, 46]
+    all_histories: list[list[float]] = []
+
+    for seed in seeds:
+        history = run_random_search(seed)
+        all_histories.append(history)
+
+    with open(DATA / "histories_random_search.json", "w") as f:
+        json.dump(all_histories, f)
 
 if __name__ == "__main__":
     main()
