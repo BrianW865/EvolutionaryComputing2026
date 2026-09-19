@@ -60,7 +60,6 @@ def make_individual() -> Individual:
     return ind
 
 def random_search():
-    console.log("hello")
     ind = make_individual()
     graph = TreeGenome.from_dict(ind.genotype).to_networkx()
     ind.fitness = mean_plus_std_tree_edit_distance(graph, TARGETS)
