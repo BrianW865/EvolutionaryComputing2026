@@ -145,7 +145,7 @@ def crossover(population: Population) -> Population:
 # This is the only deliberate difference between the two EA files!!
 # Everything else is held identical to isolate the effects of mutation operator.
 
-MUTATION_RATE: float = 0.3
+MUTATION_RATE: float = 0.4
 
 def mutate(population: Population) -> Population:
     to_mutate = population.where(lambda ind: bool(ind.tags.get("mutate", False)))
