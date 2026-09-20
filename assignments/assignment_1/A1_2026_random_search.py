@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Literal
 import statistics
 import json
+import matplotlib.pyplot as plt
 
 import networkx as nx
 import numpy as np
@@ -60,6 +61,36 @@ def make_individual() -> Individual:
     ind.genotype = random_tree(NUM_OF_MODULES).to_dict()
     return ind
 
+def plotting(
+    histories_variant1: list[list[float]],
+) -> None:
+    """
+    Plots mean ± std of best fitness per generation, across independent runs.
+    """
+    history_array = np.array(histories_variant1)
+    mean_per_gen = history_array.mean(axis=0)
+    std_per_gen = history_array.std(axis=0)
+
+    generations = np.arange(len(mean_per_gen))
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    ax.plot(generations, mean_per_gen, label="Random search", color="blue")
+    ax.fill_between(
+        generations,
+        mean_per_gen - std_per_gen,
+        mean_per_gen + std_per_gen,
+        color="blue",
+        alpha=0.2,
+    )
+
+    ax.set_xlabel("Generation")
+    ax.set_ylabel("Best fitness (tree edit distance)")
+    ax.set_title("Convergence: Random search")
+    ax.legend()
+    plt.savefig(DATA / "random_search_convergence.png", dpi=300)
+    plt.close()
+
 def random_search():
     ind = make_individual()
     graph = TreeGenome.from_dict(ind.genotype).to_networkx()
@@ -112,6 +143,8 @@ def main()-> None:
 
     with open(DATA / "histories_random_search.json", "w") as f:
         json.dump(all_histories, f)
+
+    plotting(all_histories)
 
 if __name__ == "__main__":
     main()
