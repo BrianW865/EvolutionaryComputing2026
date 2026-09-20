@@ -42,6 +42,12 @@ from ariel.ec import (
     Population,
     config,
 )
+from ariel.ec.genotypes.tree import TreeGenome
+from ariel.ec.genotypes.tree.operators import (
+    random_tree,
+    crossover_subtree,
+    mutate_replace_node
+) 
 
 install()
 console = Console()
@@ -68,6 +74,7 @@ def make_individual() -> Individual:
     # the genome as a dict (.to_dict()), not as a raw TreeGenome object -
     # otherwise Individual persistence fails with a JSON serialization error.
     ind.genotype = random_tree(NUM_OF_MODULES).to_dict()
+
     return ind
 
 
