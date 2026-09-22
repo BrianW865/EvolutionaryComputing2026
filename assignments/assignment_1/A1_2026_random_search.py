@@ -35,7 +35,7 @@ DATA.mkdir(parents=True, exist_ok=True)
 
 # --- EXPERIMENT CONSTANTS --- #
 TARGET_DIR: Path = HERE / "target_bodies"  # the bodies you must approach
-NUM_OF_MODULES: int = 10  # module budget per evolved body
+NUM_OF_MODULES: int = 20  # module budget per evolved body
 SPAWN_POS: list[float] = [0.0, 0.0, 0.1]
 
 NUM_OF_EVALUATIONS = 120
