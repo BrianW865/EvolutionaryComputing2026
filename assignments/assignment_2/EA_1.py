@@ -7,6 +7,8 @@ import mujoco as mj
 import numpy as np
 import numpy.typing as npt
 from mujoco import viewer
+import random
+import json
 
 from ariel.ec import (
     EA,
@@ -45,38 +47,19 @@ TARGET_POSITION: list[float] = [2.0, 0.0, 0.1]          # where it should end up
 SIM_DURATION: float = 15.0                              # seconds of simulated time per evaluation
 MODE: ViewerTypes = "launcher"                          # see run_experiment() for the options
 
+
+#------------constants that can be changed-------------------
+target_population_size: int = 20
+INITIAL_POPULATION: int = 20
+NUM_GENERATIONS: int = 5
+HIDDEN_SIZE: int = 6    #can be changed is own preference (explain!) / the hidden layer of the NN
+MUTATION_RATE: float = 0.4
+
 def build_world() -> SimpleFlatWorld:                   # the world that the robot moves in, is constant and can be changed!
     return SimpleFlatWorld()
 
-
 def build_robot() -> CoreModule:
     return gecko()                      # the body can be changed, but also update the OUPUT size (hinges) and INPUT (amount of qpos)
-
-
-# ============================================================================ #
-#  2. THE CONTROLLER CONTRACT
-# ============================================================================ #
-#
-# MuJoCo calls the controller every physics step with (model, data); its job
-# is to write into data.ctrl.
-#
-#   INPUTS   : whatever you read from `data` (qpos, qvel, time, ...), plus any
-#              task info you already know, e.g. the vector to TARGET_POSITION.
-#              INPUT SIZE is your choice, but must stay CONSTANT.
-#   OUTPUTS  : exactly `model.nu` values, one per actuated hinge.
-#   RANGE    : hinges accept [-pi/2, +pi/2] radians. A tanh output gives
-#              [-1, 1] - rescale: actions * (np.pi / 2).
-#   WRITING  : DIRECT (data.ctrl[:] = actions) commands the angle straight -
-#              fast, but can destabilise the sim on large jumps. DELTA
-#              (data.ctrl[:] += actions * alpha, alpha ~ 0.05, then clip) is
-#              smoother but accumulates, so clipping is required. Pick one,
-#              justify it, use it everywhere.
-#   NaN      : blown-up weights silently write NaN into data.ctrl. Assert
-#              against it while developing.
-#
-# ============================================================================ #
-
-HIDDEN_SIZE: int = 6    #can be changed is own preference (explain!) / the hidden layer of the NN
 
 def nn_controller(
     model: mj.MjModel,
@@ -91,7 +74,6 @@ def nn_controller(
     outputs = np.tanh(layer1 @ w2)   # in [-1, 1]
 
     return outputs * (np.pi / 2)  # in [-pi/2, pi/2]   -> rescales the hinges!
-
 
 def make_random_weights(
     input_size: int,
@@ -112,44 +94,122 @@ def make_random_weights(
     ]
 
 def make_individual() -> Individual:
-    ind = Individual
+    world = build_world()
+    robot = build_robot()
+
+    world.spawn(
+        robot.spec,
+        position = SPAWN_POS,
+        correct_collision_with_floor = True,
+    )
+
+    model = world.spec.compile()
+    data = mj.MjData(model)
+    input_size = len(data.qpos)
+    output_size = model.nu
+
+    weights = make_random_weights(input_size, output_size)
+    genotype = np.concatenate([weights[0].flatten(), weights[1].flatten()])
+
+    ind = Individual()
+    ind.genotype = genotype.tolist()
+
     return ind
 
 def evaluate(population: Population) -> Population:
-    # use the fitness function
-    return 
+    world = build_world()
+    robot = build_robot()
+    world.spawn(
+        robot.spec,
+        position=SPAWN_POS,
+        correct_collision_with_floor=True,
+    )
 
-def select_parents(population: Population) -> List[Individual]:
-    #Tournament selection?
-    parents = []
-    return parents
+    model = world.spec.compile()
+    data = mj.MjData(model)
 
-def crossover(parents: List[Individual], population: Population) -> Population:
-    """"
-        parent 1 -> [0.2, 0.7, 0.1, 0.4, 0.3]
-        paretn 2 -> [0.5, 0.1, 0.9, 0.6, 0.7]
-          crossover -> [0.2, 0.7, | 0.1, 0.4, 0.3]
-               child 1 -> [0.2, 0.7, 0.9, 0.6, 0.7]
-               child 2 -> [0.5, 0.1, 0.1, 0.4, 0.3]
-    """"
+    input_size = len(data.qpos)
+    output_size = model.nu
+
+    w1_size = input_size * HIDDEN_SIZE
+    w2_size = HIDDEN_SIZE * output_size
+
+    for ind in population.unevaluated:
+        genotype = np.asarray(ind.genotype)
+        w1 = genotype[:w1_size].reshape(input_size, HIDDEN_SIZE,)
+        w2 = genotype[w1_size:w1_size + w2_size].reshape(HIDDEN_SIZE, output_size,)
+        weights = [w1, w2]
+
+        ind.fitness = run_experiment(weights, mode = "simple")
+    
+    return population
+
+def parent_selection(population: Population) -> Population:
+    amount_of_parents: int = len(population)
+    i: int = 0
+
+    for ind in population:
+        ind.tags["selected"] = False
+
+    while i < amount_of_parents:
+        tournament_selections = random.sample(list(population), 5)
+        best_one = min(tournament_selections, key=lambda individual: individual.fitness)
+        best_one.tags["selected"] = True
+        i += 1
+
+    selected_count = sum(1 for ind in population if ind.tags.get("selected", False))
+    console.log(
+        f"[cyan]Parent Selection: {selected_count}/{len(population)} marked for reproduction[/cyan]",
+    )
+
+    return population
+
+def crossover(population: Population) -> Population:
+    parents = population.where(lambda ind: bool(ind.tags.get("selected", False)))
+
+    for idx in range(0, len(parents) - 1, 2):
+        parent_1 = parents[idx]
+        parent_2 = parents[idx + 1]
+        crossover_point = np.random.randint(1, len(parent_1.genotype))
+
+        child_1 = Individual()
+        child_1.genotype = np.concatenate([parent_1.genotype[:crossover_point], parent_2.genotype[crossover_point:]]).tolist()
+        child_1.tags = {"mutate": True}
+
+        child_2 = Individual()
+        child_2.genotype = np.concatenate([parent_2.genotype[:crossover_point], parent_1.genotype[crossover_point:]]).tolist()
+        child_2.tags = {"mutate": True}
+
+        population.extend([child_1, child_2])
+
     return population
 
 def mutate(population: Population) -> Population:
-    #add small certain number to certain weights of individuals
-    #ones selected with mutate = True 
+    to_mutate = population.where(lambda ind: bool(ind.tags.get("mutate", False)))
+
+    for ind in to_mutate:
+        if random.random() < MUTATION_RATE:
+            index = random.randint(0, len(ind.genotype) - 1)
+            console.log(f"mutation number before: {ind.genotype[index]}")
+            mutation_addition = np.random.normal(0, 0.03)  #this is gaussian mutation!
+            console.log(f"Adding mutation_addition: {mutation_addition}")
+            ind.genotype[index] += mutation_addition
+            console.log(f"mutation number after: {ind.genotype[index]}")
+
     return population
 
 def survivor_selection(population: Population) -> Population:
-    #select the 50% best fitnesses
-    return population
+    survivors = population.best(sort = "min", n = config.target_population_size)
+    survior_ids = {ind.id for ind in survivors}
 
-def EA_1(input_size: int, output_size: int) -> list(npt.NDArray[np.float64]):
-    return [None, None]
+    for ind in population:
+        ind.alive = ind.id in survior_ids
+    
+    return population
 
 def get_core_position(data: mj.MjData) -> npt.NDArray[np.float64]:
     return np.asarray(data.qpos[0:3]).copy()    # Return the robot core's current (x, y, z) world position, read before and after stepping (data.geom("robot1_core").xpos)
 
-#!!!TO DO!!!
 def fitness_function(
     initial_position: npt.NDArray[np.float64],
     final_position: npt.NDArray[np.float64],
@@ -171,10 +231,7 @@ def fitness_function(
     target = np.asarray(TARGET_POSITION)
     return float(np.linalg.norm(final_position[:2] - target[:2]))
 
-def run_experiment(mode: ViewerTypes = MODE) -> float:
-    # This is the function your EA calls once per individual, with `mode` set to "simple" (headless).
-    # Returns the fitness of this run. Lower is better.
-
+def run_experiment(weights: list[npt.NDArray[np.float64]], mode: ViewerTypes = MODE) -> float:
     world = build_world()
     robot = build_robot()
 
@@ -184,53 +241,30 @@ def run_experiment(mode: ViewerTypes = MODE) -> float:
         correct_collision_with_floor=True,
     )
 
-    # Compile the world into a model. USE AS IS.
     model = world.spec.compile()
     data = mj.MjData(model)
 
-    # Put the simulation in a clean, known state before reading anything.
     mj.mj_resetData(model, data)
     mj.mj_forward(model, data)
 
-    # --- Wire up the controller -------------------------------------------- #
-    # Sizes are read from the compiled model, never hardcoded - they depend on
-    # the body you chose in build_robot().
-    input_size = len(data.qpos)
-    output_size = model.nu
-
-    #change to the EA version
-    weights = make_random_weights(input_size, output_size)
-
+    #input_size = len(data.qpos)
+    #output_size = model.nu
 
     def control_callback(m: mj.MjModel, d: mj.MjData) -> None:
-        """Compute and apply actions; MuJoCo calls this every physics step."""
         actions = nn_controller(m, d, weights)
-
-        # DIRECT application (see the controller contract above).
         d.ctrl[:] = actions
 
-        # DELTA application - comment out the line above and use these instead:
-        # delta = 0.05
-        # d.ctrl[:] += actions * delta
-        # d.ctrl[:] = np.clip(d.ctrl, -np.pi / 2, np.pi / 2)
-
-    # --- Record the starting point ----------------------------------------- #
     initial_position = get_core_position(data)
 
-    # --- Run ---------------------------------------------------------------- #
     if mode != "no_control":
         mj.set_mjcb_control(control_callback)
 
     match mode:
         case "launcher":
-            # Interactive window. Great for seeing what your robot does,
-            # useless inside an evolutionary loop.
             viewer.launch(model=model, data=data)
         case "simple":
-            # Headless. THIS is the one your EA uses.
             simple_runner(model, data, duration=SIM_DURATION)
         case "video":
-            # Render to an mp4 - for the figures in your report.
             recorder = VideoRecorder(output_folder=str(DATA / "__videos__"))
             video_renderer(
                 model,
@@ -239,54 +273,68 @@ def run_experiment(mode: ViewerTypes = MODE) -> float:
                 video_recorder=recorder,
             )
         case "frame":
-            # A single image of the scene. Useful to check your spawn position
-            # and that the robot is not clipping through the floor.
             single_frame_renderer(model, data, steps=1, show=True)
         case "no_control":
-            # No controller attached: drag the hinges around by hand.
             viewer.launch(model=model, data=data)
 
-    # Detach the callback again so the next run starts clean.
     mj.set_mjcb_control(None)
-
-    # --- Score -------------------------------------------------------------- #
     final_position = get_core_position(data)
     fitness = fitness_function(initial_position, final_position)
 
-    console.log(f"start  : {np.round(initial_position, 3)}")
-    console.log(f"end    : {np.round(final_position, 3)}")
-    console.log(f"target : {np.round(TARGET_POSITION, 3)}")
-    console.log(f"fitness: {fitness:.4f}   (lower is better)")
+    #console.log(f"start  : {np.round(initial_position, 3)}")
+    #console.log(f"end    : {np.round(final_position, 3)}")
+    #console.log(f"target : {np.round(TARGET_POSITION, 3)}")
+    #console.log(f"fitness: {fitness:.4f}   (lower is better)")
 
     return fitness
 
+def run_ea(seed: int) -> list[float]:
+    global RNG
+
+    random.seed(seed)
+    RNG = np.random.default_rng(seed)
+    set_seed(seed)
+
+    initial = Population([make_individual() for _ in range (config.target_population_size)])
+    initial = evaluate(initial)
+
+    ops: list[EAOperation] = [
+        EAOperation(parent_selection),
+        EAOperation(crossover),
+        EAOperation(mutate),
+        EAOperation(evaluate),
+        EAOperation(survivor_selection),
+    ]
+
+    ea = EA(initial, ops, num_steps=NUM_GENERATIONS, is_maximisation = False)
+    history: list[float] = []
+
+    for gen in range(NUM_GENERATIONS):
+        ea.step()
+        best = ea.get_solution('best', only_alive = False)
+        history.append(best.fitness)
+
+    console.log(f"--- Results (seed={seed}) ---")
+    console.log(f"best = {ea.get_solution('best', only_alive=False)}")
+    console.log(f"median = {ea.get_solution('median', only_alive=False)}")
+    console.log(f"worst = {ea.get_solution('worst', only_alive=False)}")
+
+    best = ea.get_solution('best', only_alive=False)
+    ea.engine.dispose()
+    return history
 
 def main() -> None:
-    """Run a single demo evaluation with a randomly-weighted controller."""
-    # A quick look at the size of the problem you are about to search.
-    mj.set_mjcb_control(None)
-    world = build_world()
-    robot = build_robot()
-    world.spawn(
-        robot.spec,
-        position=SPAWN_POS,
-        correct_collision_with_floor=True,
-    )
-    model = world.spec.compile()
-    data = mj.MjData(model)
+    config.target_population_size = 20
 
-    input_size = len(data.qpos)
-    output_size = model.nu
-    num_weights = (
-        input_size * HIDDEN_SIZE
-        + HIDDEN_SIZE * output_size
-    )
-    console.log(f"controller inputs (len(data.qpos)) : {input_size}")
-    console.log(f"controller outputs (model.nu)      : {output_size}")
-    console.log(f"genotype length (total weights)    : {num_weights}")
+    seeds = [42]
+    all_histories: list[list[float]] = []
 
-    run_experiment(MODE)
+    for seed in seeds:
+        history = run_ea(seed)
+        all_histories.append(history)
 
-
+    with open(DATA / "histories_variant1.json", "w") as f:
+        json.dump(all_histories, f)
+    
 if __name__ == "__main__":
     main()
