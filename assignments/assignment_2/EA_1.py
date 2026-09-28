@@ -1,6 +1,8 @@
 # Standard library
 from pathlib import Path
 from typing import Literal
+import json
+import matplotlib.pyplot as plt
 
 # Third-party libraries
 import mujoco as mj
@@ -8,7 +10,6 @@ import numpy as np
 import numpy.typing as npt
 from mujoco import viewer
 import random
-import json
 
 from ariel.ec import (
     EA,
@@ -326,10 +327,40 @@ def run_ea(seed: int) -> list[float]:
     ea.engine.dispose()
     return history
 
+def plotting(
+    histories_variant1: list[list[float]],
+) -> None:
+    """
+    Plots mean ± std of best fitness per generation, across independent runs.
+    """
+    history_array = np.array(histories_variant1)
+    mean_per_gen = history_array.mean(axis=0)
+    std_per_gen = history_array.std(axis=0)
+
+    generations = np.arange(len(mean_per_gen))
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    ax.plot(generations, mean_per_gen, label="EA1", color="red")
+    ax.fill_between(
+        generations,
+        mean_per_gen - std_per_gen,
+        mean_per_gen + std_per_gen,
+        color="red",
+        alpha=0.2,
+    )
+
+    ax.set_xlabel("Generation")
+    ax.set_ylabel("Best fitness (distance to target)")
+    ax.set_title("Convergence: EA1")
+    ax.legend()
+    plt.savefig(DATA / "ea1_convergence.png", dpi=300)
+    plt.close()
+
 def main() -> None:
     config.target_population_size = 20
 
-    seeds = [42]
+    seeds = [42, 43, 44, 45, 46]
     all_histories: list[list[float]] = []
 
     for seed in seeds:
@@ -338,6 +369,7 @@ def main() -> None:
 
     with open(DATA / "histories_variant1.json", "w") as f:
         json.dump(all_histories, f)
-    
+    plotting(all_histories)
+
 if __name__ == "__main__":
     main()
