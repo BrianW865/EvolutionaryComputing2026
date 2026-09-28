@@ -189,12 +189,11 @@ def mutate(population: Population) -> Population:
 
     for ind in to_mutate:
         if random.random() < MUTATION_RATE:
-            index = random.randint(0, len(ind.genotype) - 1)
-            #console.log(f"mutation number before: {ind.genotype[index]}")
-            mutation_addition = np.random.normal(0, 0.03)  #this is gaussian mutation!
-            #console.log(f"Adding mutation_addition: {mutation_addition}")
-            ind.genotype[index] += mutation_addition
-            #console.log(f"mutation number after: {ind.genotype[index]}")
+            amount_of_mutations = 3
+            for i in range(amount_of_mutations):
+                index = random.randint(0, len(ind.genotype) - 1)
+                mutation_addition = np.random.normal(0, 0.03)  #this is gaussian mutation!
+                ind.genotype[index] += mutation_addition
 
     return population
 
@@ -362,7 +361,7 @@ def main() -> None:
             console.log(item)
         all_histories.append(history)
 
-    with open(DATA / "histories_variant1.json", "w") as f:
+    with open(DATA / "histories_variant2.json", "w") as f:
         json.dump(all_histories, f)
 
     plotting(all_histories)
