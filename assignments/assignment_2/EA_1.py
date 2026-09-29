@@ -45,7 +45,7 @@ DATA.mkdir(parents=True, exist_ok=True)
 SPAWN_POS: list[float] = [0.0, 0.0, 0.1]                # where the robot starts
 TARGET_POSITION: list[float] = [2.0, 0.0, 0.1]          # where it should end up
 SIM_DURATION: float = 15.0                              # seconds of simulated time per evaluation
-MODE: ViewerTypes = "launcher"                          # see run_experiment() for the options
+MODE: ViewerTypes = "video"                          # see run_experiment() for the options
 
 
 #------------constants that can be changed-------------------
@@ -56,7 +56,20 @@ HIDDEN_SIZE: int = 6    #can be changed is own preference (explain!) / the hidde
 MUTATION_RATE: float = 0.4
 
 def build_world() -> SimpleFlatWorld:                   # the world that the robot moves in, is constant and can be changed!
-    return SimpleFlatWorld()
+    world = SimpleFlatWorld()
+    target_body = world.spec.worldbody.add_body(
+        name="target_marker",
+        pos=TARGET_POSITION,
+    )
+    target_body.add_geom(
+        name="target_marker_geom",
+        type=mj.mjtGeom.mjGEOM_BOX,
+        size=[0.1, 0.1, 0.1],
+        rgba=[1.0, 0.0, 0.0, 0.7],
+        contype=0,
+        conaffinity=0,
+    )
+    return world
 
 def build_robot() -> CoreModule:
     return gecko()                      # the body can be changed, but also update the OUPUT size (hinges) and INPUT (amount of qpos)
@@ -140,7 +153,7 @@ def evaluate(population: Population) -> Population:
         w2 = genotype[w1_size:w1_size + w2_size].reshape(HIDDEN_SIZE, output_size,)
         weights = [w1, w2]
 
-        ind.fitness = run_experiment(weights, mode = "simple")
+        ind.fitness = run_experiment(weights, mode = MODE)
     
     return population
 
