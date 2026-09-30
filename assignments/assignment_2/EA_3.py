@@ -52,6 +52,7 @@ MIN_GENERATIONS: int = 50
 HIDDEN_SIZE: int = 6    #can be changed is own preference (explain!) / the hidden layer of the NN
 MUTATION_RATE: float = 0.4
 TOLERANCE: float = 0.01
+WINDOW_SIZE: int = 20   #number of generations without significant improvement before stopping the EA
 
 def build_world() -> SimpleFlatWorld:                   # the world that the robot moves in, is constant and can be changed!
     world = SimpleFlatWorld() 
@@ -340,7 +341,7 @@ def run_ea(seed: int) -> list[float]:
     
         console.log(f"Improvement: {improvement:.4f}, Generations without significant improvement: {generations_without_significant_improvement}")
             
-        if generations_without_significant_improvement >= 20:
+        if generations_without_significant_improvement >= WINDOW_SIZE:
             break
     
     console.log(f"--- Results (seed={seed}) ---")
