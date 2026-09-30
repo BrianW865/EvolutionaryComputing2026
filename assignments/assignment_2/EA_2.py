@@ -48,8 +48,6 @@ SPAWN_POS: list[float] = [0.0, 0.0, 0.1]                # where the robot starts
 TARGET_POSITION: list[float] = [2.0, 0.0, 0.1]          # where it should end up
 SIM_DURATION: float = 15.0                              # seconds of simulated time per evaluation
 MODE: ViewerTypes = "launcher"                          # see run_experiment() for the options
-
-
 #------------constants that can be changed-------------------
 target_population_size: int = 50
 INITIAL_POPULATION: int = 50
@@ -58,20 +56,7 @@ HIDDEN_SIZE: int = 6    #can be changed is own preference (explain!) / the hidde
 MUTATION_RATE: float = 0.4
 
 def build_world() -> SimpleFlatWorld:                   # the world that the robot moves in, is constant and can be changed!
-    world = SimpleFlatWorld()
-    target_body = world.spec.worldbody.add_body(
-        name="target_marker",
-        pos=TARGET_POSITION,
-    )
-    target_body.add_geom(
-        name="target_marker_geom",
-        type=mj.mjtGeom.mjGEOM_BOX,
-        size=[0.1, 0.1, 0.1],
-        rgba=[1.0, 0.0, 0.0, 0.7],
-        contype=0,
-        conaffinity=0,
-    )
-    return world
+    return SimpleFlatWorld()
 
 def build_robot() -> CoreModule:
     return spider()                      # the body can be changed, but also update the OUPUT size (hinges) and INPUT (amount of qpos)
@@ -155,7 +140,7 @@ def evaluate(population: Population) -> Population:
         w2 = genotype[w1_size:w1_size + w2_size].reshape(HIDDEN_SIZE, output_size,)
         weights = [w1, w2]
 
-        ind.fitness = run_experiment(weights, mode = MODE)
+        ind.fitness = run_experiment(weights, mode = "simple")
     
     return population
 
@@ -204,12 +189,11 @@ def mutate(population: Population) -> Population:
 
     for ind in to_mutate:
         if random.random() < MUTATION_RATE:
-            index = random.randint(0, len(ind.genotype) - 1)
-            #console.log(f"mutation number before: {ind.genotype[index]}")
-            mutation_addition = np.random.normal(0, 0.03)  #this is gaussian mutation!
-            #console.log(f"Adding mutation_addition: {mutation_addition}")
-            ind.genotype[index] += mutation_addition
-            #console.log(f"mutation number after: {ind.genotype[index]}")
+            amount_of_mutations = 3
+            for i in range(amount_of_mutations):
+                index = random.randint(0, len(ind.genotype) - 1)
+                mutation_addition = np.random.normal(0, 0.03)  #this is gaussian mutation!
+                ind.genotype[index] += mutation_addition
 
     return population
 
@@ -377,7 +361,7 @@ def main() -> None:
             console.log(item)
         all_histories.append(history)
 
-    with open(DATA / "histories_variant1.json", "w") as f:
+    with open(DATA / "histories_variant2.json", "w") as f:
         json.dump(all_histories, f)
 
     plotting(all_histories)
