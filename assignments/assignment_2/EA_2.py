@@ -1,8 +1,6 @@
 # Standard library
 from pathlib import Path
 from typing import Literal
-import json
-import matplotlib.pyplot as plt
 
 # Third-party libraries
 import mujoco as mj
@@ -10,6 +8,8 @@ import numpy as np
 import numpy.typing as npt
 from mujoco import viewer
 import random
+import json
+import matplotlib.pyplot as plt
 
 from ariel.ec import (
     EA,
@@ -55,13 +55,11 @@ NUM_GENERATIONS: int = 100
 HIDDEN_SIZE: int = 6    #can be changed is own preference (explain!) / the hidden layer of the NN
 MUTATION_RATE: float = 0.4
 
-def build_world() -> SimpleFlatWorld:
+def build_world() -> SimpleFlatWorld:                   # the world that the robot moves in, is constant and can be changed!
     return SimpleFlatWorld()
-
 
 def build_robot() -> CoreModule:
     return spider()                      # the body can be changed, but also update the OUPUT size (hinges) and INPUT (amount of qpos)
-
 
 def nn_controller(
     model: mj.MjModel,
@@ -76,7 +74,6 @@ def nn_controller(
     outputs = np.tanh(layer1 @ w2)   # in [-1, 1]
 
     return outputs * (np.pi / 2)  # in [-pi/2, pi/2]   -> rescales the hinges!
-
 
 def make_random_weights(
     input_size: int,
@@ -173,7 +170,7 @@ def crossover(population: Population) -> Population:
     for idx in range(0, len(parents) - 1, 2):
         parent_1 = parents[idx]
         parent_2 = parents[idx + 1]
-        crossover_point = RNG.integers(1, len(parent_1.genotype))
+        crossover_point = np.random.randint(1, len(parent_1.genotype))
 
         child_1 = Individual()
         child_1.genotype = np.concatenate([parent_1.genotype[:crossover_point], parent_2.genotype[crossover_point:]]).tolist()
@@ -192,21 +189,20 @@ def mutate(population: Population) -> Population:
 
     for ind in to_mutate:
         if random.random() < MUTATION_RATE:
-            index = random.randint(0, len(ind.genotype) - 1)
-            #console.log(f"mutation number before: {ind.genotype[index]}")
-            mutation_addition = RNG.normal(0, 0.03)  #this is gaussian mutation!
-            #console.log(f"Adding mutation_addition: {mutation_addition}")
-            ind.genotype[index] += mutation_addition
-            #console.log(f"mutation number after: {ind.genotype[index]}")
+            amount_of_mutations = 3
+            for i in range(amount_of_mutations):
+                index = random.randint(0, len(ind.genotype) - 1)
+                mutation_addition = np.random.normal(0, 0.03)  #this is gaussian mutation!
+                ind.genotype[index] += mutation_addition
 
     return population
 
 def survivor_selection(population: Population) -> Population:
     survivors = population.best(sort = "min", n = config.target_population_size)
-    survivor_ids = {ind.id for ind in survivors}
+    survior_ids = {ind.id for ind in survivors}
 
     for ind in population:
-        ind.alive = ind.id in survivor_ids
+        ind.alive = ind.id in survior_ids
     
     return population
 
@@ -365,9 +361,10 @@ def main() -> None:
             console.log(item)
         all_histories.append(history)
 
-    with open(DATA / "histories_variant1.json", "w") as f:
+    with open(DATA / "histories_variant2.json", "w") as f:
         json.dump(all_histories, f)
-    plotting(all_histories)
 
+    plotting(all_histories)
+    
 if __name__ == "__main__":
     main()
