@@ -22,7 +22,6 @@ from ariel.ec import (
 # Local libraries (ARIEL)
 from ariel import console
 from ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
-from ariel.body_phenotypes.robogen_lite.prebuilt_robots.gecko import gecko
 from ariel.body_phenotypes.robogen_lite.prebuilt_robots.spider import spider
 from ariel.ec import set_seed
 from ariel.simulation.environments import SimpleFlatWorld
@@ -33,9 +32,6 @@ from ariel.utils.video_recorder import VideoRecorder
 # Type aliases
 type ViewerTypes = Literal["launcher", "video", "simple", "frame", "no_control"]
 
-SEED = 42                                   # can be changed, and should be tested using multiple seeds
-RNG = np.random.default_rng(SEED)
-set_seed(SEED)                              # needs to be reseeded when the seed is changed!
 
 # --- DATA SETUP --- #
 SCRIPT_NAME = Path(__file__).stem
@@ -47,16 +43,34 @@ DATA.mkdir(parents=True, exist_ok=True)
 SPAWN_POS: list[float] = [0.0, 0.0, 0.1]                # where the robot starts
 TARGET_POSITION: list[float] = [2.0, 0.0, 0.1]          # where it should end up
 SIM_DURATION: float = 15.0                              # seconds of simulated time per evaluation
-MODE: ViewerTypes = "launcher"                          # see run_experiment() for the options
+MODE: ViewerTypes = "simple"                          # see run_experiment() for the options
+
+
 #------------constants that can be changed-------------------
-target_population_size: int = 50
-INITIAL_POPULATION: int = 50
-NUM_GENERATIONS: int = 100
+POPULATION_SIZE: int = 20
+MAX_GENERATIONS: int = 150
+MIN_GENERATIONS: int = 50
 HIDDEN_SIZE: int = 6    #can be changed is own preference (explain!) / the hidden layer of the NN
 MUTATION_RATE: float = 0.4
+TOLERANCE: float = 0.01
+WINDOW_SIZE: int = 20   #number of generations without significant improvement before stopping the EA
 
-def build_world() -> SimpleFlatWorld:
-    return SimpleFlatWorld()
+def build_world() -> SimpleFlatWorld:                   # the world that the robot moves in, is constant and can be changed!
+    world = SimpleFlatWorld()
+    #creating a target marker in the world, to show where the robot should go
+    target_body = world.spec.worldbody.add_body(
+        name="target_marker",
+        pos=TARGET_POSITION,
+    )
+    target_body.add_geom(
+        name="target_marker_geom",
+        type=mj.mjtGeom.mjGEOM_BOX,
+        size=[0.1, 0.1, 0.1],
+        rgba=[1.0, 0.0, 0.0, 0.7],
+        contype=0,
+        conaffinity=0,
+    )
+    return world
 
 
 def build_robot() -> CoreModule:
@@ -143,7 +157,7 @@ def evaluate(population: Population) -> Population:
         w2 = genotype[w1_size:w1_size + w2_size].reshape(HIDDEN_SIZE, output_size,)
         weights = [w1, w2]
 
-        ind.fitness = run_experiment(weights, mode = "simple")
+        ind.fitness = run_experiment(weights, mode = MODE)
     
     return population
 
@@ -306,18 +320,41 @@ def run_ea(seed: int) -> list[float]:
         EAOperation(survivor_selection),
     ]
 
-    ea = EA(initial, ops, num_steps=NUM_GENERATIONS, is_maximisation = False)
+    ea = EA(initial, ops, num_steps=MAX_GENERATIONS, is_maximisation = False)
     history: list[float] = []
 
-    for gen in range(NUM_GENERATIONS):
+    previous_best = ea.get_solution('best', only_alive=False)
+
+    number_of_generations = 0
+    generations_without_significant_improvement = 0
+    for gen in range(MAX_GENERATIONS):
         ea.step()
         best = ea.get_solution('best', only_alive = False)
+
+        improvement = previous_best.fitness - best.fitness
+        previous_best = best
         history.append(best.fitness)
+        number_of_generations += 1
+
+        if number_of_generations <= MIN_GENERATIONS:
+            continue
+
+        if improvement >= TOLERANCE:
+            generations_without_significant_improvement = 0
+        else:
+            generations_without_significant_improvement += 1
+
+        console.log(f"Improvement: {improvement:.4f}, Generations without significant improvement: {generations_without_significant_improvement}")
+        
+        if generations_without_significant_improvement >= WINDOW_SIZE:
+            break
 
     console.log(f"--- Results (seed={seed}) ---")
     console.log(f"best = {ea.get_solution('best', only_alive=False)}")
     console.log(f"median = {ea.get_solution('median', only_alive=False)}")
     console.log(f"worst = {ea.get_solution('worst', only_alive=False)}")
+
+    console.log(f"Number of generations: {number_of_generations}")
 
     best = ea.get_solution('best', only_alive=False)
     ea.engine.dispose()
@@ -329,7 +366,12 @@ def plotting(
     """
     Plots mean ± std of best fitness per generation, across independent runs.
     """
-    history_array = np.array(histories_variant1)
+    max_length = max(len(history) for history in histories_variant1)
+    padded_histories = [
+        history + [history[-1]] * (max_length - len(history))
+        for history in histories_variant1
+    ]
+    history_array = np.array(padded_histories)
     mean_per_gen = history_array.mean(axis=0)
     std_per_gen = history_array.std(axis=0)
 
@@ -354,7 +396,7 @@ def plotting(
     plt.close()
 
 def main() -> None:
-    config.target_population_size = 20
+    config.target_population_size = POPULATION_SIZE
 
     seeds = [42, 43, 44, 45, 46]
     all_histories: list[list[float]] = []
@@ -371,3 +413,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+   

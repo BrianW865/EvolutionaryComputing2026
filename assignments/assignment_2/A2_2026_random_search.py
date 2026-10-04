@@ -13,7 +13,7 @@ from mujoco import viewer
 # Local libraries (ARIEL)
 from ariel import console
 from ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
-from ariel.body_phenotypes.robogen_lite.prebuilt_robots.gecko import gecko
+from ariel.body_phenotypes.robogen_lite.prebuilt_robots.spider import spider
 from ariel.ec import set_seed
 from ariel.simulation.environments import SimpleFlatWorld
 from ariel.utils.renderers import single_frame_renderer, video_renderer
@@ -23,11 +23,6 @@ from ariel.utils.video_recorder import VideoRecorder
 # Type aliases
 type ViewerTypes = Literal["launcher", "video", "simple", "frame", "no_control"]
 
-# --- RANDOM GENERATOR SETUP --- #
-SEED = 42
-RNG = np.random.default_rng(SEED)
-set_seed(SEED)
-
 # --- DATA SETUP --- #
 SCRIPT_NAME = Path(__file__).stem
 CWD = Path.cwd()
@@ -35,23 +30,39 @@ DATA = CWD / "__data__" / SCRIPT_NAME
 DATA.mkdir(parents=True, exist_ok=True)
 
 # --- EXPERIMENT CONSTANTS --- #
-SPAWN_POS: list[float] = [0.0, 0.0, 0.1]  # where the robot starts
-TARGET_POSITION: list[float] = [2.0, 0.0, 0.1]  # where it should end up
-SIM_DURATION: float = 15.0  # seconds of simulated time per evaluation
-MODE: ViewerTypes = "launcher"  # see run_experiment() for the options
+SPAWN_POS: list[float] = [0.0, 0.0, 0.1]                # where the robot starts
+TARGET_POSITION: list[float] = [2.0, 0.0, 0.1]          # where it should end up
+SIM_DURATION: float = 15.0                              # seconds of simulated time per evaluation
+MODE: ViewerTypes = "simple"                          # see run_experiment() for the options
+
 
 #------------constants that can be changed-------------------
-target_population_size: int = 20
-INITIAL_POPULATION: int = 20
-NUM_GENERATIONS: int = 5
+POPULATION_SIZE: int = 20
+MAX_GENERATIONS: int = 150
+MIN_GENERATIONS: int = 50
 HIDDEN_SIZE: int = 6    #can be changed is own preference (explain!) / the hidden layer of the NN
+MUTATION_RATE: float = 0.4
+TOLERANCE: float = 0.01
+WINDOW_SIZE: int = 20   #number of generations without significant improvement before stopping the EA
 
 def build_world() -> SimpleFlatWorld:
-    return SimpleFlatWorld()
-
+    world = SimpleFlatWorld()
+    target_body = world.spec.worldbody.add_body(
+        name="target_marker",
+        pos=TARGET_POSITION,
+    )
+    target_body.add_geom(
+        name="target_marker_geom",
+        type=mj.mjtGeom.mjGEOM_BOX,
+        size=[0.1, 0.1, 0.1],
+        rgba=[1.0, 0.0, 0.0, 0.7],
+        contype=0,
+        conaffinity=0,
+    )
+    return world
 
 def build_robot() -> CoreModule:
-    return gecko() 
+    return spider() 
 
 def nn_controller(
     model: mj.MjModel,
@@ -190,17 +201,32 @@ def random_search(seed: int, budget: int, checkpoint_every: int) -> list[float]:
 
     for i in range(1, budget + 1):
         weights = make_random_weights(input_size, output_size)
-        fitness = run_experiment(weights, mode = "simple")
-
+        fitness = run_experiment(weights, mode="simple")
         if fitness < best_fitness:
             best_fitness = fitness
         if i % checkpoint_every == 0:
             history.append(best_fitness)
+            console.log(f"seed progress: {i}/{budget}")
 
     return history
 
-budget= target_population_size * NUM_GENERATIONS
-checkpoint_every = target_population_size
+#Budget based on all three EAs for the random search
+#Requires EA_1.py (and EA_2/EA_3, if pooling) to have been run first,
+#So their histories_*.json files already exist in __data__/.
+ea_histories = []
+for variant_folder, variant_file in [
+    ("EA_1", "histories_variant1.json"),
+    ("EA_2", "histories_variant2.json"),
+    ("EA_3", "histories_variant3.json"),
+]:
+    with open(CWD / "__data__" / variant_folder / variant_file) as f:
+        ea_histories.extend(json.load(f))
+
+avg_generations = sum(len(h) for h in ea_histories) / len(ea_histories)
+NUM_GENERATIONS = round(avg_generations)
+
+budget= POPULATION_SIZE * NUM_GENERATIONS
+checkpoint_every = POPULATION_SIZE
 
 def main()-> None:
     seeds = [42, 43, 44, 45, 46]

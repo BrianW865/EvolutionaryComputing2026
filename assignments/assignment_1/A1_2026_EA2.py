@@ -49,7 +49,7 @@ console = Console()
 SCRIPT_NAME = Path(__file__).stem
 HERE = Path(__file__).parent
 CWD = Path.cwd()
-DATA = CWD / "__data__" / SCRIPT_NAME
+DATA = HERE / "__data__" / SCRIPT_NAME
 DATA.mkdir(parents=True, exist_ok=True)
 
 # --- EXPERIMENT CONSTANTS --- #
