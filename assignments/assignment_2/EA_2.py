@@ -7,7 +7,6 @@ import mujoco as mj
 import numpy as np
 import numpy.typing as npt
 from mujoco import viewer
-import random
 import json
 import matplotlib.pyplot as plt
 
@@ -53,7 +52,7 @@ target_population_size: int = 50
 INITIAL_POPULATION: int = 50
 NUM_GENERATIONS: int = 100
 HIDDEN_SIZE: int = 6    #can be changed is own preference (explain!) / the hidden layer of the NN
-MUTATION_RATE: float = 0.4
+MUTATION_RATE: float = 0.7
 
 def build_world() -> SimpleFlatWorld:                   # the world that the robot moves in, is constant and can be changed!
     return SimpleFlatWorld()
@@ -152,7 +151,7 @@ def parent_selection(population: Population) -> Population:
         ind.tags["selected"] = False
 
     while i < amount_of_parents:
-        tournament_selections = random.sample(list(population), 5)
+        tournament_selections = RNG.choice(list(population), size = 5, replace = False)
         best_one = min(tournament_selections, key=lambda individual: individual.fitness)
         best_one.tags["selected"] = True
         i += 1
@@ -170,7 +169,7 @@ def crossover(population: Population) -> Population:
     for idx in range(0, len(parents) - 1, 2):
         parent_1 = parents[idx]
         parent_2 = parents[idx + 1]
-        crossover_point = np.random.randint(1, len(parent_1.genotype))
+        crossover_point = RNG.integers(1, len(parent_1.genotype))
 
         child_1 = Individual()
         child_1.genotype = np.concatenate([parent_1.genotype[:crossover_point], parent_2.genotype[crossover_point:]]).tolist()
@@ -188,12 +187,13 @@ def mutate(population: Population) -> Population:
     to_mutate = population.where(lambda ind: bool(ind.tags.get("mutate", False)))
 
     for ind in to_mutate:
-        if random.random() < MUTATION_RATE:
-            amount_of_mutations = 3
-            for i in range(amount_of_mutations):
-                index = random.randint(0, len(ind.genotype) - 1)
-                mutation_addition = np.random.normal(0, 0.03)  #this is gaussian mutation!
-                ind.genotype[index] += mutation_addition
+        if RNG.random() < MUTATION_RATE:
+            index = RNG.integers(0, len(ind.genotype) - 1)
+            console.log(f"mutation number before: {ind.genotype[index]}")
+            mutation_addition = RNG.normal(0, 0.03)  #this is gaussian mutation!
+            console.log(f"Adding mutation_addition: {mutation_addition}")
+            ind.genotype[index] += mutation_addition
+            console.log(f"mutation number after: {ind.genotype[index]}")
 
     return population
 
@@ -277,17 +277,15 @@ def run_experiment(weights: list[npt.NDArray[np.float64]], mode: ViewerTypes = M
     final_position = get_core_position(data)
     fitness = fitness_function(initial_position, final_position)
 
-    #console.log(f"start  : {np.round(initial_position, 3)}")
-    #console.log(f"end    : {np.round(final_position, 3)}")
-    #console.log(f"target : {np.round(TARGET_POSITION, 3)}")
-    #console.log(f"fitness: {fitness:.4f}   (lower is better)")
+    console.log(f"start  : {np.round(initial_position, 3)}")
+    console.log(f"end    : {np.round(final_position, 3)}")
+    console.log(f"target : {np.round(TARGET_POSITION, 3)}")
+    console.log(f"fitness: {fitness:.4f}   (lower is better)")
 
     return fitness
 
 def run_ea(seed: int) -> list[float]:
     global RNG
-
-    random.seed(seed)
     RNG = np.random.default_rng(seed)
     set_seed(seed)
 
@@ -344,14 +342,13 @@ def plotting(
 
     ax.set_xlabel("Generation")
     ax.set_ylabel("Best fitness (distance to target)")
-    ax.set_title("Convergence: EA1")
+    ax.set_title("Convergence: EA2")
     ax.legend()
-    plt.savefig(DATA / "ea1_convergence.png", dpi=300)
+    plt.savefig(DATA / "ea2_convergence.png", dpi=300)
     plt.close()
 
 def main() -> None:
-    config.target_population_size = 20
-
+    config.target_population_size = 50
     seeds = [42, 43, 44, 45, 46]
     all_histories: list[list[float]] = []
 

@@ -7,7 +7,6 @@ import mujoco as mj
 import numpy as np
 import numpy.typing as npt
 from mujoco import viewer
-import random
 import json
 import matplotlib.pyplot as plt
 
@@ -53,7 +52,7 @@ target_population_size: int = 50
 INITIAL_POPULATION: int = 50
 NUM_GENERATIONS: int = 100
 HIDDEN_SIZE: int = 6    #can be changed is own preference (explain!) / the hidden layer of the NN
-MUTATION_RATE: float = 0.4
+MUTATION_RATE: float = 0.8
 
 def build_world() -> SimpleFlatWorld:                   # the world that the robot moves in, is constant and can be changed!
     return SimpleFlatWorld()
@@ -152,7 +151,7 @@ def parent_selection(population: Population) -> Population:
         ind.tags["selected"] = False
 
     while i < amount_of_parents:
-        tournament_selections = random.sample(list(population), 5)
+        tournament_selections = RNG.choice(list(population), size = 5, replace = False)
         best_one = min(tournament_selections, key=lambda individual: individual.fitness)
         best_one.tags["selected"] = True
         i += 1
@@ -170,7 +169,7 @@ def crossover(population: Population) -> Population:
     for idx in range(0, len(parents) - 1, 2):
         parent_1 = parents[idx]
         parent_2 = parents[idx + 1]
-        crossover_point = np.random.randint(1, len(parent_1.genotype))
+        crossover_point = RNG.integers(1, len(parent_1.genotype))
 
         child_1 = Individual()
         child_1.genotype = np.concatenate([parent_1.genotype[:crossover_point], parent_2.genotype[crossover_point:]]).tolist()
@@ -188,10 +187,10 @@ def mutate(population: Population) -> Population:
     to_mutate = population.where(lambda ind: bool(ind.tags.get("mutate", False)))
 
     for ind in to_mutate:
-        if random.random() < MUTATION_RATE:
-            index = random.randint(0, len(ind.genotype) - 1)
+        if RNG.random() < MUTATION_RATE:
+            index = RNG.integers(0, len(ind.genotype) - 1)
             #console.log(f"mutation number before: {ind.genotype[index]}")
-            mutation_addition = np.random.normal(0, 0.03)  #this is gaussian mutation!
+            mutation_addition = RNG.normal(0, 0.03)  #this is gaussian mutation!
             #console.log(f"Adding mutation_addition: {mutation_addition}")
             ind.genotype[index] += mutation_addition
             #console.log(f"mutation number after: {ind.genotype[index]}")
@@ -287,8 +286,6 @@ def run_experiment(weights: list[npt.NDArray[np.float64]], mode: ViewerTypes = M
 
 def run_ea(seed: int) -> list[float]:
     global RNG
-
-    random.seed(seed)
     RNG = np.random.default_rng(seed)
     set_seed(seed)
 
@@ -313,8 +310,9 @@ def run_ea(seed: int) -> list[float]:
 
     console.log(f"--- Results (seed={seed}) ---")
     console.log(f"best = {ea.get_solution('best', only_alive=False)}")
-    console.log(f"median = {ea.get_solution('median', only_alive=False)}")
-    console.log(f"worst = {ea.get_solution('worst', only_alive=False)}")
+    console.log(f"mean = {ea.get_solution('mean', only_alive=False)}")
+    #console.log(f"median = {ea.get_solution('median', only_alive=False)}")
+    #console.log(f"worst = {ea.get_solution('worst', only_alive=False)}")
 
     best = ea.get_solution('best', only_alive=False)
     ea.engine.dispose()
@@ -351,19 +349,26 @@ def plotting(
     plt.close()
 
 def main() -> None:
-    config.target_population_size = 20
-
+    config.target_population_size = 50
     seeds = [42, 43, 44, 45, 46]
     all_histories: list[list[float]] = []
 
+    total = 0.0
+    mean = 0.0
+
     for seed in seeds:
         history = run_ea(seed)
-        for item in history:
-            console.log(item)
+        '''for item in history:
+            console.log(item)'''
         all_histories.append(history)
+        total += history[-1]
 
-    with open(DATA / "histories_variant1.json", "w") as f:
-        json.dump(all_histories, f)
+    mean = total / 5
+    console.log(f"Mean of the {MUTATION_RATE} = {mean}")
+    
+
+    '''with open(DATA / "histories_variant1.json", "w") as f:
+        json.dump(all_histories, f)'''
 
     plotting(all_histories)
     
