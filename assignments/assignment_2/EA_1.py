@@ -9,12 +9,6 @@ import mujoco as mj
 import numpy as np
 import numpy.typing as npt
 from mujoco import viewer
-<<<<<<< HEAD
-import json
-import matplotlib.pyplot as plt
-=======
-import random
->>>>>>> origin/aliki
 
 from ariel.ec import (
     EA,
@@ -52,17 +46,14 @@ MODE: ViewerTypes = "simple"                          # see run_experiment() for
 
 
 #------------constants that can be changed-------------------
-POPULATION_SIZE: int = 20
+POPULATION_SIZE: int = 100
 MAX_GENERATIONS: int = 150
 MIN_GENERATIONS: int = 50
 HIDDEN_SIZE: int = 6    #can be changed is own preference (explain!) / the hidden layer of the NN
-<<<<<<< HEAD
-MUTATION_RATE: float = 0.4
-=======
+
 MUTATION_RATE: float = 0.4
 TOLERANCE: float = 0.01
 WINDOW_SIZE: int = 20   #number of generations without significant improvement before stopping the EA
->>>>>>> origin/dimitris_ea
 
 def build_world() -> SimpleFlatWorld:                   # the world that the robot moves in, is constant and can be changed!
     world = SimpleFlatWorld()
@@ -172,17 +163,22 @@ def evaluate(population: Population) -> Population:
 
 def parent_selection(population: Population) -> Population:
     amount_of_parents: int = len(population)
-    i: int = 0
 
     for ind in population:
         ind.tags["selected"] = False
+        ind.tags["selection_count"] = 0
 
-    while i < amount_of_parents:
+    parents = [] 
+
+    while len(parents) < amount_of_parents:
         tournament_selections = RNG.choice(list(population), size = 5, replace = False)
         best_one = min(tournament_selections, key=lambda individual: individual.fitness)
+        parents.append(best_one)
         best_one.tags["selected"] = True
-        i += 1
+        best_one.tags["selection_count"] = best_one.tags.get("selection_count", 0) + 1
 
+
+    population.tags["parents"] = parents
     selected_count = sum(1 for ind in population if ind.tags.get("selected", False))
     console.log(
         f"[cyan]Parent Selection: {selected_count}/{len(population)} marked for reproduction[/cyan]",
@@ -191,7 +187,10 @@ def parent_selection(population: Population) -> Population:
     return population
 
 def crossover(population: Population) -> Population:
-    parents = population.where(lambda ind: bool(ind.tags.get("selected", False)))
+    parents = population.tags.get("parents", [])
+
+    if not parents:
+        return population
 
     for idx in range(0, len(parents) - 1, 2):
         parent_1 = parents[idx]
@@ -215,7 +214,7 @@ def mutate(population: Population) -> Population:
 
     for ind in to_mutate:
         if RNG.random() < MUTATION_RATE:
-            index = RNG.integers(0, len(ind.genotype) - 1)
+            index = RNG.integers(0, len(ind.genotype))
             #console.log(f"mutation number before: {ind.genotype[index]}")
             mutation_addition = RNG.normal(0, 0.03)  #this is gaussian mutation!
             #console.log(f"Adding mutation_addition: {mutation_addition}")
@@ -404,37 +403,20 @@ def plotting(
     plt.close()
 
 def main() -> None:
-<<<<<<< HEAD
     config.target_population_size = POPULATION_SIZE
-=======
-    config.target_population_size = POPULATION_SIZE
-
->>>>>>> origin/dimitris_ea
+    
     seeds = [42, 43, 44, 45, 46]
     all_histories: list[list[float]] = []
 
-    total = 0.0
-    mean = 0.0
-
     for seed in seeds:
         history = run_ea(seed)
-        '''for item in history:
-            console.log(item)'''
+        for item in history:
+            console.log(item)
         all_histories.append(history)
-        total += history[-1]
 
-<<<<<<< HEAD
-    mean = total / 5
-    console.log(f"Mean of the {MUTATION_RATE} = {mean}")
-    
-
-    '''with open(DATA / "histories_variant1.json", "w") as f:
-        json.dump(all_histories, f)'''
-
-=======
     with open(DATA / "histories_variant1.json", "w") as f:
         json.dump(all_histories, f)
->>>>>>> origin/aliki
+
     plotting(all_histories)
 
 if __name__ == "__main__":

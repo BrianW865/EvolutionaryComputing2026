@@ -1,14 +1,14 @@
 # Standard library
 from pathlib import Path
 from typing import Literal
+import json
+import matplotlib.pyplot as plt
 
 # Third-party libraries
 import mujoco as mj
 import numpy as np
 import numpy.typing as npt
 from mujoco import viewer
-import json
-import matplotlib.pyplot as plt
 
 from ariel.ec import (
     EA,
@@ -43,38 +43,39 @@ SPAWN_POS: list[float] = [0.0, 0.0, 0.1]                # where the robot starts
 TARGET_POSITION: list[float] = [2.0, 0.0, 0.1]          # where it should end up
 SIM_DURATION: float = 15.0                              # seconds of simulated time per evaluation
 MODE: ViewerTypes = "simple"                          # see run_experiment() for the options
+
+
 #------------constants that can be changed-------------------
-POPULATION_SIZE: int = 20
+POPULATION_SIZE: int = 100
 MAX_GENERATIONS: int = 150
 MIN_GENERATIONS: int = 50
 HIDDEN_SIZE: int = 6    #can be changed is own preference (explain!) / the hidden layer of the NN
-<<<<<<< HEAD
-MUTATION_RATE: float = 0.7
-=======
+
 MUTATION_RATE: float = 0.4
 TOLERANCE: float = 0.01
 WINDOW_SIZE: int = 20   #number of generations without significant improvement before stopping the EA
->>>>>>> origin/dimitris_ea
 
-def build_world() -> SimpleFlatWorld:  
-    world = SimpleFlatWorld() 
+def build_world() -> SimpleFlatWorld:                   # the world that the robot moves in, is constant and can be changed!
+    world = SimpleFlatWorld()
+    #creating a target marker in the world, to show where the robot should go
     target_body = world.spec.worldbody.add_body(
-            name="target_marker",
-            pos=TARGET_POSITION,
+        name="target_marker",
+        pos=TARGET_POSITION,
     )
-
     target_body.add_geom(
-            name="target_marker_geom",
-            type=mj.mjtGeom.mjGEOM_BOX,
-            size=[0.1, 0.1, 0.1],
-            rgba=[1.0, 0.0, 0.0, 0.7],
-            contype=0,
-            conaffinity=0,
-    )                # the world that the robot moves in, is constant and can be changed!
+        name="target_marker_geom",
+        type=mj.mjtGeom.mjGEOM_BOX,
+        size=[0.1, 0.1, 0.1],
+        rgba=[1.0, 0.0, 0.0, 0.7],
+        contype=0,
+        conaffinity=0,
+    )
     return world
+
 
 def build_robot() -> CoreModule:
     return spider()                      # the body can be changed, but also update the OUPUT size (hinges) and INPUT (amount of qpos)
+
 
 def nn_controller(
     model: mj.MjModel,
@@ -89,6 +90,7 @@ def nn_controller(
     outputs = np.tanh(layer1 @ w2)   # in [-1, 1]
 
     return outputs * (np.pi / 2)  # in [-pi/2, pi/2]   -> rescales the hinges!
+
 
 def make_random_weights(
     input_size: int,
@@ -155,23 +157,28 @@ def evaluate(population: Population) -> Population:
         w2 = genotype[w1_size:w1_size + w2_size].reshape(HIDDEN_SIZE, output_size,)
         weights = [w1, w2]
 
-        ind.fitness = run_experiment(weights, mode = "simple")
+        ind.fitness = run_experiment(weights, mode = MODE)
     
     return population
 
 def parent_selection(population: Population) -> Population:
     amount_of_parents: int = len(population)
-    i: int = 0
 
     for ind in population:
         ind.tags["selected"] = False
+        ind.tags["selection_count"] = 0
 
-    while i < amount_of_parents:
+    parents = [] 
+
+    while len(parents) < amount_of_parents:
         tournament_selections = RNG.choice(list(population), size = 5, replace = False)
         best_one = min(tournament_selections, key=lambda individual: individual.fitness)
+        parents.append(best_one)
         best_one.tags["selected"] = True
-        i += 1
+        best_one.tags["selection_count"] = best_one.tags.get("selection_count", 0) + 1
 
+
+    population.tags["parents"] = parents
     selected_count = sum(1 for ind in population if ind.tags.get("selected", False))
     console.log(
         f"[cyan]Parent Selection: {selected_count}/{len(population)} marked for reproduction[/cyan]",
@@ -180,7 +187,10 @@ def parent_selection(population: Population) -> Population:
     return population
 
 def crossover(population: Population) -> Population:
-    parents = population.where(lambda ind: bool(ind.tags.get("selected", False)))
+    parents = population.tags.get("parents", [])
+
+    if not parents:
+        return population
 
     for idx in range(0, len(parents) - 1, 2):
         parent_1 = parents[idx]
@@ -203,22 +213,12 @@ def mutate(population: Population) -> Population:
     to_mutate = population.where(lambda ind: bool(ind.tags.get("mutate", False)))
 
     for ind in to_mutate:
-<<<<<<< HEAD
         if RNG.random() < MUTATION_RATE:
-            index = RNG.integers(0, len(ind.genotype) - 1)
-            console.log(f"mutation number before: {ind.genotype[index]}")
-            mutation_addition = RNG.normal(0, 0.03)  #this is gaussian mutation!
-            console.log(f"Adding mutation_addition: {mutation_addition}")
-            ind.genotype[index] += mutation_addition
-            console.log(f"mutation number after: {ind.genotype[index]}")
-=======
-        if random.random() < MUTATION_RATE:
             amount_of_mutations = 3
             for i in range(amount_of_mutations):
-                index = random.randint(0, len(ind.genotype) - 1)
+                index = RNG.integers(0, len(ind.genotype) - 1)
                 mutation_addition = RNG.normal(0, 0.03)  #this is gaussian mutation!
                 ind.genotype[index] += mutation_addition
->>>>>>> origin/aliki
 
     return population
 
@@ -302,10 +302,10 @@ def run_experiment(weights: list[npt.NDArray[np.float64]], mode: ViewerTypes = M
     final_position = get_core_position(data)
     fitness = fitness_function(initial_position, final_position)
 
-    console.log(f"start  : {np.round(initial_position, 3)}")
-    console.log(f"end    : {np.round(final_position, 3)}")
-    console.log(f"target : {np.round(TARGET_POSITION, 3)}")
-    console.log(f"fitness: {fitness:.4f}   (lower is better)")
+    #console.log(f"start  : {np.round(initial_position, 3)}")
+    #console.log(f"end    : {np.round(final_position, 3)}")
+    #console.log(f"target : {np.round(TARGET_POSITION, 3)}")
+    #console.log(f"fitness: {fitness:.4f}   (lower is better)")
 
     return fitness
 
@@ -329,53 +329,53 @@ def run_ea(seed: int) -> list[float]:
     history: list[float] = []
 
     previous_best = ea.get_solution('best', only_alive=False)
-    
+
     number_of_generations = 0
     generations_without_significant_improvement = 0
     for gen in range(MAX_GENERATIONS):
         ea.step()
         best = ea.get_solution('best', only_alive = False)
-    
+
         improvement = previous_best.fitness - best.fitness
         previous_best = best
         history.append(best.fitness)
         number_of_generations += 1
-    
+
         if number_of_generations <= MIN_GENERATIONS:
             continue
-    
+
         if improvement >= TOLERANCE:
             generations_without_significant_improvement = 0
         else:
             generations_without_significant_improvement += 1
-    
+
         console.log(f"Improvement: {improvement:.4f}, Generations without significant improvement: {generations_without_significant_improvement}")
-            
+        
         if generations_without_significant_improvement >= WINDOW_SIZE:
             break
-    
+
     console.log(f"--- Results (seed={seed}) ---")
     console.log(f"best = {ea.get_solution('best', only_alive=False)}")
-    console.log(f"median = {ea.get_solution('median', only_alive=False)}")
-    console.log(f"worst = {ea.get_solution('worst', only_alive=False)}")
-    
+    console.log(f"mean = {ea.get_solution('mean', only_alive=False)}")
+    #console.log(f"median = {ea.get_solution('median', only_alive=False)}")
+    #console.log(f"worst = {ea.get_solution('worst', only_alive=False)}")
+
     console.log(f"Number of generations: {number_of_generations}")
-    
 
     best = ea.get_solution('best', only_alive=False)
     ea.engine.dispose()
     return history
 
 def plotting(
-    histories_variant2: list[list[float]],
+    histories_variant1: list[list[float]],
 ) -> None:
     """
     Plots mean ± std of best fitness per generation, across independent runs.
     """
-    max_length = max(len(history) for history in histories_variant2)
+    max_length = max(len(history) for history in histories_variant1)
     padded_histories = [
         history + [history[-1]] * (max_length - len(history))
-        for history in histories_variant2
+        for history in histories_variant1
     ]
     history_array = np.array(padded_histories)
     mean_per_gen = history_array.mean(axis=0)
@@ -385,7 +385,7 @@ def plotting(
 
     fig, ax = plt.subplots(figsize=(10, 6))
 
-    ax.plot(generations, mean_per_gen, label="EA2", color="red")
+    ax.plot(generations, mean_per_gen, label="EA1", color="red")
     ax.fill_between(
         generations,
         mean_per_gen - std_per_gen,
@@ -396,18 +396,14 @@ def plotting(
 
     ax.set_xlabel("Generation")
     ax.set_ylabel("Best fitness (distance to target)")
-    ax.set_title("Convergence: EA2")
+    ax.set_title("Convergence: EA1")
     ax.legend()
-    plt.savefig(DATA / "ea2_convergence.png", dpi=300)
+    plt.savefig(DATA / "ea1_convergence.png", dpi=300)
     plt.close()
 
 def main() -> None:
-<<<<<<< HEAD
-    config.target_population_size = 50
-=======
     config.target_population_size = POPULATION_SIZE
-
->>>>>>> origin/dimitris_ea
+    
     seeds = [42, 43, 44, 45, 46]
     all_histories: list[list[float]] = []
 
@@ -417,10 +413,12 @@ def main() -> None:
             console.log(item)
         all_histories.append(history)
 
-    with open(DATA / "histories_variant2.json", "w") as f:
+    with open(DATA / "histories_variant1.json", "w") as f:
         json.dump(all_histories, f)
 
     plotting(all_histories)
-    
+
 if __name__ == "__main__":
     main()
+
+   
