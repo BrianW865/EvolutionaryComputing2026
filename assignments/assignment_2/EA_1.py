@@ -1,14 +1,20 @@
 # Standard library
 from pathlib import Path
 from typing import Literal
+import json
+import matplotlib.pyplot as plt
 
 # Third-party libraries
 import mujoco as mj
 import numpy as np
 import numpy.typing as npt
 from mujoco import viewer
+<<<<<<< HEAD
 import json
 import matplotlib.pyplot as plt
+=======
+import random
+>>>>>>> origin/aliki
 
 from ariel.ec import (
     EA,
@@ -21,7 +27,6 @@ from ariel.ec import (
 # Local libraries (ARIEL)
 from ariel import console
 from ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
-from ariel.body_phenotypes.robogen_lite.prebuilt_robots.gecko import gecko
 from ariel.body_phenotypes.robogen_lite.prebuilt_robots.spider import spider
 from ariel.ec import set_seed
 from ariel.simulation.environments import SimpleFlatWorld
@@ -76,8 +81,10 @@ def build_world() -> SimpleFlatWorld:                   # the world that the rob
     )
     return world
 
+
 def build_robot() -> CoreModule:
     return spider()                      # the body can be changed, but also update the OUPUT size (hinges) and INPUT (amount of qpos)
+
 
 def nn_controller(
     model: mj.MjModel,
@@ -92,6 +99,7 @@ def nn_controller(
     outputs = np.tanh(layer1 @ w2)   # in [-1, 1]
 
     return outputs * (np.pi / 2)  # in [-pi/2, pi/2]   -> rescales the hinges!
+
 
 def make_random_weights(
     input_size: int,
@@ -218,10 +226,10 @@ def mutate(population: Population) -> Population:
 
 def survivor_selection(population: Population) -> Population:
     survivors = population.best(sort = "min", n = config.target_population_size)
-    survior_ids = {ind.id for ind in survivors}
+    survivor_ids = {ind.id for ind in survivors}
 
     for ind in population:
-        ind.alive = ind.id in survior_ids
+        ind.alive = ind.id in survivor_ids
     
     return population
 
@@ -415,6 +423,7 @@ def main() -> None:
         all_histories.append(history)
         total += history[-1]
 
+<<<<<<< HEAD
     mean = total / 5
     console.log(f"Mean of the {MUTATION_RATE} = {mean}")
     
@@ -422,7 +431,13 @@ def main() -> None:
     '''with open(DATA / "histories_variant1.json", "w") as f:
         json.dump(all_histories, f)'''
 
+=======
+    with open(DATA / "histories_variant1.json", "w") as f:
+        json.dump(all_histories, f)
+>>>>>>> origin/aliki
     plotting(all_histories)
-    
+
 if __name__ == "__main__":
     main()
+
+   

@@ -21,7 +21,6 @@ from ariel.ec import (
 # Local libraries (ARIEL)
 from ariel import console
 from ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
-from ariel.body_phenotypes.robogen_lite.prebuilt_robots.gecko import gecko
 from ariel.body_phenotypes.robogen_lite.prebuilt_robots.spider import spider
 from ariel.ec import set_seed
 from ariel.simulation.environments import SimpleFlatWorld
@@ -207,7 +206,11 @@ def mutate(population: Population) -> Population:
         if RNG.random() < MUTATION_RATE:
             amount_of_mutations = 5
             for i in range(amount_of_mutations):
+<<<<<<< HEAD
                 index = RNG.integers(0, len(ind.genotype) - 1)
+=======
+                index = random.randint(0, len(ind.genotype) - 1)
+>>>>>>> origin/aliki
                 mutation_addition = RNG.normal(0, 0.03)  #this is gaussian mutation!
                 ind.genotype[index] += mutation_addition
 

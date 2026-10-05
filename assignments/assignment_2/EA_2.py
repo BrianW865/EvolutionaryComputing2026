@@ -21,7 +21,6 @@ from ariel.ec import (
 # Local libraries (ARIEL)
 from ariel import console
 from ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
-from ariel.body_phenotypes.robogen_lite.prebuilt_robots.gecko import gecko
 from ariel.body_phenotypes.robogen_lite.prebuilt_robots.spider import spider
 from ariel.ec import set_seed
 from ariel.simulation.environments import SimpleFlatWorld
@@ -204,6 +203,7 @@ def mutate(population: Population) -> Population:
     to_mutate = population.where(lambda ind: bool(ind.tags.get("mutate", False)))
 
     for ind in to_mutate:
+<<<<<<< HEAD
         if RNG.random() < MUTATION_RATE:
             index = RNG.integers(0, len(ind.genotype) - 1)
             console.log(f"mutation number before: {ind.genotype[index]}")
@@ -211,15 +211,23 @@ def mutate(population: Population) -> Population:
             console.log(f"Adding mutation_addition: {mutation_addition}")
             ind.genotype[index] += mutation_addition
             console.log(f"mutation number after: {ind.genotype[index]}")
+=======
+        if random.random() < MUTATION_RATE:
+            amount_of_mutations = 3
+            for i in range(amount_of_mutations):
+                index = random.randint(0, len(ind.genotype) - 1)
+                mutation_addition = RNG.normal(0, 0.03)  #this is gaussian mutation!
+                ind.genotype[index] += mutation_addition
+>>>>>>> origin/aliki
 
     return population
 
 def survivor_selection(population: Population) -> Population:
     survivors = population.best(sort = "min", n = config.target_population_size)
-    survior_ids = {ind.id for ind in survivors}
+    survivor_ids = {ind.id for ind in survivors}
 
     for ind in population:
-        ind.alive = ind.id in survior_ids
+        ind.alive = ind.id in survivor_ids
     
     return population
 
