@@ -37,7 +37,7 @@ MODE: ViewerTypes = "simple"                          # see run_experiment() for
 
 
 #------------constants that can be changed-------------------
-POPULATION_SIZE: int = 20
+POPULATION_SIZE: int = 100
 MAX_GENERATIONS: int = 150
 MIN_GENERATIONS: int = 50
 HIDDEN_SIZE: int = 6    #can be changed is own preference (explain!) / the hidden layer of the NN
@@ -225,7 +225,7 @@ for variant_folder, variant_file in [
 avg_generations = sum(len(h) for h in ea_histories) / len(ea_histories)
 NUM_GENERATIONS = round(avg_generations)
 
-budget= POPULATION_SIZE * NUM_GENERATIONS
+budget = POPULATION_SIZE * (NUM_GENERATIONS + 1)
 checkpoint_every = POPULATION_SIZE
 
 def main()-> None:

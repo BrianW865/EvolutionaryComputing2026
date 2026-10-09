@@ -20,6 +20,7 @@ with open(CWD / "__data__" / "EA_3" / "histories_variant3.json") as f:
 with open(CWD / "__data__" / "A2_2026_random_search" / "histories_random_search.json") as f:
     histories_random = json.load(f)
 
+histories_random = [h[1:] for h in histories_random]
 
 def plotting(
     histories_variant1: list[list[float]],

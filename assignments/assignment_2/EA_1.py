@@ -47,7 +47,7 @@ MODE: ViewerTypes = "simple"                          # see run_experiment() for
 
 
 #------------constants that can be changed-------------------
-POPULATION_SIZE: int = 20
+POPULATION_SIZE: int = 100
 MAX_GENERATIONS: int = 150
 MIN_GENERATIONS: int = 50
 HIDDEN_SIZE: int = 6    #can be changed is own preference (explain!) / the hidden layer of the NN
@@ -217,11 +217,12 @@ def mutate(population: Population) -> Population:
 
 def survivor_selection(population: Population) -> Population:
     survivors = population.best(sort = "min", n = config.target_population_size)
-    survivor_ids = {ind.id for ind in survivors}
-
-    for ind in population:
-        ind.alive = ind.id in survivor_ids
+    survivor_ids = {id(ind) for ind in survivors}
     
+    for ind in population:
+        ind.alive = id(ind) in survivor_ids
+
+    print(len(population), len(survivors), sum(ind.alive for ind in population))
     return population
 
 def get_core_position(data: mj.MjData) -> npt.NDArray[np.float64]:
