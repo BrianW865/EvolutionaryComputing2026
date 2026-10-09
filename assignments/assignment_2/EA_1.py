@@ -47,13 +47,15 @@ MODE: ViewerTypes = "simple"                          # see run_experiment() for
 
 #------------constants that can be changed-------------------
 POPULATION_SIZE: int = 100
-MAX_GENERATIONS: int = 150
+MAX_GENERATIONS: int = 5
 MIN_GENERATIONS: int = 50
 HIDDEN_SIZE: int = 6    #can be changed is own preference (explain!) / the hidden layer of the NN
 
 MUTATION_RATE: float = 0.4
 TOLERANCE: float = 0.01
 WINDOW_SIZE: int = 20   #number of generations without significant improvement before stopping the EA
+EVAL_COUNT = 0
+PARENTS: list = []
 
 def build_world() -> SimpleFlatWorld:                   # the world that the robot moves in, is constant and can be changed!
     world = SimpleFlatWorld()
@@ -134,6 +136,10 @@ def make_individual() -> Individual:
     return ind
 
 def evaluate(population: Population) -> Population:
+    global EVAL_COUNT
+    to_evaluate = list(population.unevaluated)
+    EVAL_COUNT += len(to_evaluate)
+
     world = build_world()
     robot = build_robot()
     world.spawn(
@@ -151,7 +157,7 @@ def evaluate(population: Population) -> Population:
     w1_size = input_size * HIDDEN_SIZE
     w2_size = HIDDEN_SIZE * output_size
 
-    for ind in population.unevaluated:
+    for ind in to_evaluate:
         genotype = np.asarray(ind.genotype)
         w1 = genotype[:w1_size].reshape(input_size, HIDDEN_SIZE,)
         w2 = genotype[w1_size:w1_size + w2_size].reshape(HIDDEN_SIZE, output_size,)
@@ -162,6 +168,7 @@ def evaluate(population: Population) -> Population:
     return population
 
 def parent_selection(population: Population) -> Population:
+    global PARENTS
     amount_of_parents: int = len(population)
 
     for ind in population:
@@ -178,7 +185,7 @@ def parent_selection(population: Population) -> Population:
         best_one.tags["selection_count"] = best_one.tags.get("selection_count", 0) + 1
 
 
-    population.tags["parents"] = parents
+    PARENTS = parents    
     selected_count = sum(1 for ind in population if ind.tags.get("selected", False))
     console.log(
         f"[cyan]Parent Selection: {selected_count}/{len(population)} marked for reproduction[/cyan]",
@@ -187,7 +194,7 @@ def parent_selection(population: Population) -> Population:
     return population
 
 def crossover(population: Population) -> Population:
-    parents = population.tags.get("parents", [])
+    parents = PARENTS
 
     if not parents:
         return population
@@ -240,20 +247,7 @@ def fitness_function(
     initial_position: npt.NDArray[np.float64],
     final_position: npt.NDArray[np.float64],
 ) -> float:
-    """Score one evaluation. LOWER IS BETTER.
-
-    The plain version: how far is the robot from the target when time runs out?
-
-    `initial_position` is unused here on purpose - it is passed in because the
-    moment you want a less naive fitness you will need it. Some things worth
-    thinking about (and, ideally, comparing in your report):
-      * Distance *reduced* rather than distance remaining, so a robot that
-        starts closer is not rewarded for standing still.
-      * Penalising a robot that falls over or leaves the arena.
-      * Whether the z-axis should count at all - a robot that jumps is not
-        closer to the target in any way you care about.
-    See `ariel.simulation.tasks.targeted_locomotion` for some worked variants.
-    """
+     
     target = np.asarray(TARGET_POSITION)
     return float(np.linalg.norm(final_position[:2] - target[:2]))
 
@@ -312,12 +306,14 @@ def run_experiment(weights: list[npt.NDArray[np.float64]], mode: ViewerTypes = M
     return fitness
 
 def run_ea(seed: int) -> list[float]:
-    global RNG
+    global RNG, EVAL_COUNT
+    EVAL_COUNT = 0    
     RNG = np.random.default_rng(seed)
     set_seed(seed)
 
     initial = Population([make_individual() for _ in range (config.target_population_size)])
     initial = evaluate(initial)
+    eval_history = [EVAL_COUNT]
 
     ops: list[EAOperation] = [
         EAOperation(parent_selection),
@@ -336,6 +332,7 @@ def run_ea(seed: int) -> list[float]:
     generations_without_significant_improvement = 0
     for gen in range(MAX_GENERATIONS):
         ea.step()
+        eval_history.append(EVAL_COUNT)
         best = ea.get_solution('best', only_alive = False)
 
         improvement = previous_best.fitness - best.fitness
@@ -366,7 +363,7 @@ def run_ea(seed: int) -> list[float]:
 
     best = ea.get_solution('best', only_alive=False)
     ea.engine.dispose()
-    return history
+    return history, eval_history
 
 def plotting(
     histories_variant1: list[list[float]],
@@ -406,18 +403,23 @@ def plotting(
 def main() -> None:
     config.target_population_size = POPULATION_SIZE
     
-    seeds = [42, 43, 44, 45, 46]
+    seeds = [42]
     all_histories: list[list[float]] = []
+    all_evals = []
 
     for seed in seeds:
-        history = run_ea(seed)
+        history, evals = run_ea(seed)
         for item in history:
             console.log(item)
         all_histories.append(history)
+        all_evals.append(evals)
 
     with open(DATA / "histories_variant1.json", "w") as f:
         json.dump(all_histories, f)
+    with open(DATA / "evals_variant1.json", "w") as f:   # variant2 / variant3 elsewhere
+        json.dump(all_evals, f)
 
+    console.log(f"total evaluations per seed: {[e[-1] for e in all_evals]}")
     plotting(all_histories)
 
 if __name__ == "__main__":
