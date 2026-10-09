@@ -37,7 +37,7 @@ MODE: ViewerTypes = "simple"                          # see run_experiment() for
 
 
 #------------constants that can be changed-------------------
-POPULATION_SIZE: int = 20
+POPULATION_SIZE: int = 100
 MAX_GENERATIONS: int = 150
 MIN_GENERATIONS: int = 50
 HIDDEN_SIZE: int = 6    #can be changed is own preference (explain!) / the hidden layer of the NN
@@ -240,7 +240,7 @@ def main()-> None:
         console.log(f"Amount of numbers stored: {number}")
         all_histories.append(history)
 
-    with open(DATA / "histories_random_search.json", "w") as f:
+    with open(DATA / "histories_random_search_3.json", "w") as f:
         json.dump(all_histories, f)
 
     plotting(all_histories)

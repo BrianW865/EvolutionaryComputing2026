@@ -31,7 +31,7 @@ def plotting(
     Plots mean + std of best fitness per generation, across independent runs,
     for both EA variants and the random search baseline.
     """
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(12, 8))
 
     for histories, label, color in [
         (histories_variant1, "EA Variant 1 (1 mutation)", "blue"),
@@ -58,7 +58,7 @@ def plotting(
             alpha=0.1,
         )
 
-    ax.set_ylim(1.0, 2.1)
+    ax.set_ylim(0.8, 2.1)
     max_generations = max(
         len(history)
         for histories in (histories_variant1, histories_variant2, histories_variant3, histories_random)
@@ -70,8 +70,8 @@ def plotting(
     ax.set_title("Convergence: EA Variant 1 vs Variant 2 vs variant 3 vs Random Search")
     ax.legend()
     plt.tight_layout()
-    plt.savefig(CWD / "__data__" / "final_convergence_plot.png", dpi=300)
-    print(f"Saved plot to {CWD / '__data__' / 'final_convergence_plot.png'}")
+    plt.savefig(CWD / "__data__" / "final_convergence_plot_2.png", dpi=300)
+    print(f"Saved plot to {CWD / '__data__' / 'final_convergence_plot_3.png'}")
     plt.show()
 
 plotting(histories_variant1, histories_variant2, histories_variant3, histories_random)

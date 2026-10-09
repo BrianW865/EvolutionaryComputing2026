@@ -162,39 +162,40 @@ def evaluate(population: Population) -> Population:
     return population
 
 def parent_selection(population: Population) -> Population:
-    amount_of_parents: int = len(population)
+    global PARENTS_SELECTED
+    population_alive = population.where(lambda ind: ind.alive)
 
-    for ind in population:
+    
+    for ind in population_alive:
         ind.tags["selected"] = False
         ind.tags["selection_count"] = 0
 
     parents = [] 
 
-    while len(parents) < amount_of_parents:
-        tournament_selections = RNG.choice(list(population), size = 5, replace = False)
+    while len(parents) < len(population_alive):
+        tournament_selections = RNG.choice(list(population_alive), size = 5, replace = False)
         best_one = min(tournament_selections, key=lambda individual: individual.fitness)
         parents.append(best_one)
         best_one.tags["selected"] = True
-        best_one.tags["selection_count"] = best_one.tags.get("selection_count", 0) + 1
+        best_one.tags["selection_count"] += 1
 
 
-    population.tags["parents"] = parents
-    selected_count = sum(1 for ind in population if ind.tags.get("selected", False))
-    console.log(
-        f"[cyan]Parent Selection: {selected_count}/{len(population)} marked for reproduction[/cyan]",
-    )
+    PARENTS_SELECTED = parents 
+    selected_count = sum(1 for ind in population_alive if ind.tags.get("selected", False))
+    console.log(f"[cyan]Parent Selection: {selected_count}/{len(population_alive)} marked for reproduction[/cyan]")
+    console.log(f"Amount selected: {len(parents)}")
 
     return population
 
 def crossover(population: Population) -> Population:
-    parents = population.tags.get("parents", [])
+    global PARENTS_SELECTED
 
-    if not parents:
+    if not PARENTS_SELECTED:
         return population
 
-    for idx in range(0, len(parents) - 1, 2):
-        parent_1 = parents[idx]
-        parent_2 = parents[idx + 1]
+    for idx in range(0, len(PARENTS_SELECTED) - 1, 2):
+        parent_1 = PARENTS_SELECTED[idx]
+        parent_2 = PARENTS_SELECTED[idx + 1]
         crossover_point = RNG.integers(1, len(parent_1.genotype))
 
         child_1 = Individual()
@@ -206,6 +207,8 @@ def crossover(population: Population) -> Population:
         child_2.tags = {"mutate": True}
 
         population.extend([child_1, child_2])
+
+    PARENTS_SELECTED = []
 
     return population
 
@@ -223,12 +226,14 @@ def mutate(population: Population) -> Population:
     return population
 
 def survivor_selection(population: Population) -> Population:
-    survivors = population.best(sort = "min", n = config.target_population_size)
-    survivor_ids = {ind.id for ind in survivors}
+    survivors = population.best(
+        sort="min",
+        n=config.target_population_size
+    )
 
     for ind in population:
-        ind.alive = ind.id in survivor_ids
-    
+        ind.alive = ind in survivors
+
     return population
 
 def get_core_position(data: mj.MjData) -> npt.NDArray[np.float64]:
@@ -413,7 +418,7 @@ def main() -> None:
             console.log(item)
         all_histories.append(history)
 
-    with open(DATA / "histories_variant1.json", "w") as f:
+    with open(DATA / "histories_variant3.json", "w") as f:
         json.dump(all_histories, f)
 
     plotting(all_histories)
