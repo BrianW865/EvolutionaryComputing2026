@@ -47,15 +47,15 @@ MODE: ViewerTypes = "simple"                          # see run_experiment() for
 
 #------------constants that can be changed-------------------
 POPULATION_SIZE: int = 100
-MAX_GENERATIONS: int = 5
+MAX_GENERATIONS: int = 150
 MIN_GENERATIONS: int = 50
 HIDDEN_SIZE: int = 6    #can be changed is own preference (explain!) / the hidden layer of the NN
 
 MUTATION_RATE: float = 0.4
+MUTATION_COUNT = 1
 TOLERANCE: float = 0.01
 WINDOW_SIZE: int = 20   #number of generations without significant improvement before stopping the EA
 EVAL_COUNT = 0
-PARENTS: list = []
 
 def build_world() -> SimpleFlatWorld:                   # the world that the robot moves in, is constant and can be changed!
     world = SimpleFlatWorld()
@@ -168,40 +168,39 @@ def evaluate(population: Population) -> Population:
     return population
 
 def parent_selection(population: Population) -> Population:
-    global PARENTS
-    amount_of_parents: int = len(population)
+    global PARENTS_SELECTED
+    population_alive = population.where(lambda ind: ind.alive)
 
-    for ind in population:
+    for ind in population_alive:
         ind.tags["selected"] = False
         ind.tags["selection_count"] = 0
 
     parents = [] 
 
-    while len(parents) < amount_of_parents:
-        tournament_selections = RNG.choice(list(population), size = 5, replace = False)
+    while len(parents) < len(population_alive):
+        tournament_selections = RNG.choice(list(population_alive), size = 5, replace = False)
         best_one = min(tournament_selections, key=lambda individual: individual.fitness)
         parents.append(best_one)
         best_one.tags["selected"] = True
-        best_one.tags["selection_count"] = best_one.tags.get("selection_count", 0) + 1
+        best_one.tags["selection_count"] += 1
 
-
-    PARENTS = parents    
-    selected_count = sum(1 for ind in population if ind.tags.get("selected", False))
-    console.log(
-        f"[cyan]Parent Selection: {selected_count}/{len(population)} marked for reproduction[/cyan]",
-    )
+    PARENTS_SELECTED = parents 
+    selected_count = sum(1 for ind in population_alive if ind.tags.get("selected", False))
+    console.log(f"[cyan]Parent Selection: {selected_count}/{len(population_alive)} marked for reproduction[/cyan]")
+    console.log(f"Amount selected: {len(parents)}")
 
     return population
 
 def crossover(population: Population) -> Population:
-    parents = PARENTS
+    global PARENTS_SELECTED
 
-    if not parents:
+
+    if not PARENTS_SELECTED:
         return population
 
-    for idx in range(0, len(parents) - 1, 2):
-        parent_1 = parents[idx]
-        parent_2 = parents[idx + 1]
+    for idx in range(0, len(PARENTS_SELECTED) - 1, 2):
+        parent_1 = PARENTS_SELECTED[idx]
+        parent_2 = PARENTS_SELECTED[idx + 1]
         crossover_point = RNG.integers(1, len(parent_1.genotype))
 
         child_1 = Individual()
@@ -214,30 +213,31 @@ def crossover(population: Population) -> Population:
 
         population.extend([child_1, child_2])
 
+    PARENTS_SELECTED = []
+
     return population
 
 def mutate(population: Population) -> Population:
-    to_mutate = population.where(lambda ind: bool(ind.tags.get("mutate", False)))
+    to_mutate = list(population.unevaluated) 
 
     for ind in to_mutate:
         if RNG.random() < MUTATION_RATE:
-            index = RNG.integers(0, len(ind.genotype))
-            #console.log(f"mutation number before: {ind.genotype[index]}")
-            mutation_addition = RNG.normal(0, 0.03)  #this is gaussian mutation!
-            #console.log(f"Adding mutation_addition: {mutation_addition}")
-            ind.genotype[index] += mutation_addition
-            #console.log(f"mutation number after: {ind.genotype[index]}")
-
+            for _ in range(MUTATION_COUNT):
+                index = RNG.integers(0, len(ind.genotype))
+                mutation_addition = RNG.normal(0, 0.03)  #this is gaussian mutation!
+                ind.genotype[index] += mutation_addition
     return population
 
 def survivor_selection(population: Population) -> Population:
-    survivors = population.best(sort = "min", n = config.target_population_size)
+    survivors = population.best(
+        sort="min",
+        n=config.target_population_size
+    )
     survivor_ids = {id(ind) for ind in survivors}
-    
+
     for ind in population:
         ind.alive = id(ind) in survivor_ids
 
-    print(len(population), len(survivors), sum(ind.alive for ind in population))
     return population
 
 def get_core_position(data: mj.MjData) -> npt.NDArray[np.float64]:
@@ -403,7 +403,7 @@ def plotting(
 def main() -> None:
     config.target_population_size = POPULATION_SIZE
     
-    seeds = [42]
+    seeds = [42, 43, 44, 45, 46]
     all_histories: list[list[float]] = []
     all_evals = []
 

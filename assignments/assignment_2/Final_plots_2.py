@@ -1,26 +1,28 @@
-print("SCRIPT STARTED")
 import json
 from pathlib import Path
+
 import numpy as np
 import matplotlib.pyplot as plt
 
-
-SCRIPT_NAME = Path(__file__).stem
 CWD = Path.cwd()
+DATA = CWD / "__data__"
+OUTPUT_FILE = DATA / "final_convergence_plot_2.png"
 
-with open(CWD / "__data__" / "EA_1" / "histories_variant1.json") as f:
-    histories_variant1 = json.load(f)
 
-with open(CWD / "__data__" / "EA_2" / "histories_variant2.json") as f:
-    histories_variant2 = json.load(f)
+def load(path: Path) -> list[list[float]]:
+    with open(path) as f:
+        return json.load(f)
 
-with open(CWD / "__data__" / "EA_3" / "histories_variant3.json") as f:
-    histories_variant3 = json.load(f)
 
-with open(CWD / "__data__" / "A2_2026_random_search" / "histories_random_search.json") as f:
-    histories_random = json.load(f)
+histories_variant1 = load(DATA / "EA_1" / "histories_variant1.json")
+histories_variant2 = load(DATA / "EA_2" / "histories_variant2.json")
+histories_variant3 = load(DATA / "EA_3" / "histories_variant3.json")
+histories_random = load(DATA / "A2_2026_random_search" / "histories_random_search.json")
 
+# The first random-search checkpoint corresponds to the initial population
+# (generation 0), which the EA histories do not contain, so drop it.
 histories_random = [h[1:] for h in histories_random]
+
 
 def plotting(
     histories_variant1: list[list[float]],
@@ -29,50 +31,54 @@ def plotting(
     histories_random: list[list[float]],
 ) -> None:
     """
-    Plots mean + std of best fitness per generation, across independent runs,
-    for both EA variants and the random search baseline.
+    Plots the mean +- one standard deviation (across seeds, ddof=1) of the
+    best fitness per generation for the three EA variants and random search.
+    Runs that stopped early are extended at their final value.
     """
-    fig, ax = plt.subplots(figsize=(10, 6))
+    plt.rcParams.update({"font.size": 10})
+    fig, ax = plt.subplots(figsize=(7, 4))
 
-    for histories, label, color in [
-        (histories_variant1, "EA Variant 1 (1 mutation)", "blue"),
-        (histories_variant2, "EA Variant 2 (3 mutations)", "red"),
-        (histories_variant3, "EA Variant 3 (5 mutations)", "green"),
+    series = [
+        (histories_variant1, "EA1 (1 mutation)", "tab:blue"),
+        (histories_variant2, "EA2 (3 mutations)", "tab:red"),
+        (histories_variant3, "EA3 (5 mutations)", "tab:green"),
         (histories_random, "Random search", "black"),
-    ]:
+    ]
+
+    max_generations = max(len(h) for histories, _, _ in series for h in histories)
+    lowest = np.inf
+    highest = -np.inf
+
+    for histories, label, color in series:
         max_length = max(len(history) for history in histories)
-        padded_histories = [
-            history + [history[-1]] * (max_length - len(history))
-            for history in histories
-        ]
-        history_array = np.array(padded_histories)
+        padded = [h + [h[-1]] * (max_length - len(h)) for h in histories]
+        history_array = np.array(padded)
         mean_per_gen = history_array.mean(axis=0)
-        std_per_gen = history_array.std(axis=0)
+        std_per_gen = history_array.std(axis=0, ddof=1)
         generations = np.arange(len(mean_per_gen))
 
-        ax.plot(generations, mean_per_gen, label=label, color=color)
+        ax.plot(generations, mean_per_gen, label=label, color=color, linewidth=1.5)
         ax.fill_between(
             generations,
             mean_per_gen - std_per_gen,
             mean_per_gen + std_per_gen,
             color=color,
-            alpha=0.1,
+            alpha=0.12,
         )
+        lowest = min(lowest, float((mean_per_gen - std_per_gen).min()))
+        highest = max(highest, float((mean_per_gen + std_per_gen).max()))
 
-    ax.set_ylim(1.0, 2.1)
-    max_generations = max(
-        len(history)
-        for histories in (histories_variant1, histories_variant2, histories_variant3, histories_random)
-        for history in histories
-    )
     ax.set_xlim(0, max_generations - 1)
+    ax.set_ylim(max(0.0, lowest - 0.05), highest + 0.05)
     ax.set_xlabel("Generation")
-    ax.set_ylabel("Best fitness (distance till endpoint)")
-    ax.set_title("Convergence: EA Variant 1 vs Variant 2 vs variant 3 vs Random Search")
+    ax.set_ylabel("Best fitness (distance to target, m)")
+    ax.set_title("Convergence of the EA variants and random search")
+    ax.grid(alpha=0.25)
     ax.legend()
-    plt.tight_layout()
-    plt.savefig(CWD / "__data__" / "final_convergence_plot.png", dpi=300)
-    print(f"Saved plot to {CWD / '__data__' / 'final_convergence_plot.png'}")
-    plt.show()
+    fig.tight_layout()
+    fig.savefig(OUTPUT_FILE, dpi=300)
+    plt.close(fig)
+    print(f"Saved plot to {OUTPUT_FILE}")
+
 
 plotting(histories_variant1, histories_variant2, histories_variant3, histories_random)

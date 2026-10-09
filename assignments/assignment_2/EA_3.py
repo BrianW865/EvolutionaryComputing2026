@@ -52,8 +52,10 @@ MIN_GENERATIONS: int = 50
 HIDDEN_SIZE: int = 6    #can be changed is own preference (explain!) / the hidden layer of the NN
 
 MUTATION_RATE: float = 0.4
+MUTATION_COUNT = 5
 TOLERANCE: float = 0.01
 WINDOW_SIZE: int = 20   #number of generations without significant improvement before stopping the EA
+EVAL_COUNT = 0
 
 def build_world() -> SimpleFlatWorld:                   # the world that the robot moves in, is constant and can be changed!
     world = SimpleFlatWorld()
@@ -134,6 +136,10 @@ def make_individual() -> Individual:
     return ind
 
 def evaluate(population: Population) -> Population:
+    global EVAL_COUNT
+    to_evaluate = list(population.unevaluated)
+    EVAL_COUNT += len(to_evaluate)
+
     world = build_world()
     robot = build_robot()
     world.spawn(
@@ -151,7 +157,7 @@ def evaluate(population: Population) -> Population:
     w1_size = input_size * HIDDEN_SIZE
     w2_size = HIDDEN_SIZE * output_size
 
-    for ind in population.unevaluated:
+    for ind in to_evaluate:
         genotype = np.asarray(ind.genotype)
         w1 = genotype[:w1_size].reshape(input_size, HIDDEN_SIZE,)
         w2 = genotype[w1_size:w1_size + w2_size].reshape(HIDDEN_SIZE, output_size,)
@@ -162,39 +168,39 @@ def evaluate(population: Population) -> Population:
     return population
 
 def parent_selection(population: Population) -> Population:
-    amount_of_parents: int = len(population)
+    global PARENTS_SELECTED
+    population_alive = population.where(lambda ind: ind.alive)
 
-    for ind in population:
+    for ind in population_alive:
         ind.tags["selected"] = False
         ind.tags["selection_count"] = 0
 
     parents = [] 
 
-    while len(parents) < amount_of_parents:
-        tournament_selections = RNG.choice(list(population), size = 5, replace = False)
+    while len(parents) < len(population_alive):
+        tournament_selections = RNG.choice(list(population_alive), size = 5, replace = False)
         best_one = min(tournament_selections, key=lambda individual: individual.fitness)
         parents.append(best_one)
         best_one.tags["selected"] = True
-        best_one.tags["selection_count"] = best_one.tags.get("selection_count", 0) + 1
+        best_one.tags["selection_count"] += 1
 
-
-    population.tags["parents"] = parents
-    selected_count = sum(1 for ind in population if ind.tags.get("selected", False))
-    console.log(
-        f"[cyan]Parent Selection: {selected_count}/{len(population)} marked for reproduction[/cyan]",
-    )
+    PARENTS_SELECTED = parents 
+    selected_count = sum(1 for ind in population_alive if ind.tags.get("selected", False))
+    console.log(f"[cyan]Parent Selection: {selected_count}/{len(population_alive)} marked for reproduction[/cyan]")
+    console.log(f"Amount selected: {len(parents)}")
 
     return population
 
 def crossover(population: Population) -> Population:
-    parents = population.tags.get("parents", [])
+    global PARENTS_SELECTED
 
-    if not parents:
+
+    if not PARENTS_SELECTED:
         return population
 
-    for idx in range(0, len(parents) - 1, 2):
-        parent_1 = parents[idx]
-        parent_2 = parents[idx + 1]
+    for idx in range(0, len(PARENTS_SELECTED) - 1, 2):
+        parent_1 = PARENTS_SELECTED[idx]
+        parent_2 = PARENTS_SELECTED[idx + 1]
         crossover_point = RNG.integers(1, len(parent_1.genotype))
 
         child_1 = Individual()
@@ -207,28 +213,31 @@ def crossover(population: Population) -> Population:
 
         population.extend([child_1, child_2])
 
+    PARENTS_SELECTED = []
+
     return population
 
 def mutate(population: Population) -> Population:
-    to_mutate = population.where(lambda ind: bool(ind.tags.get("mutate", False)))
+    to_mutate = list(population.unevaluated) 
 
     for ind in to_mutate:
         if RNG.random() < MUTATION_RATE:
-            amount_of_mutations = 5
-            for i in range(amount_of_mutations):
-                index = RNG.integers(0, len(ind.genotype) - 1)
+            for _ in range(MUTATION_COUNT):
+                index = RNG.integers(0, len(ind.genotype))
                 mutation_addition = RNG.normal(0, 0.03)  #this is gaussian mutation!
                 ind.genotype[index] += mutation_addition
-
     return population
 
 def survivor_selection(population: Population) -> Population:
-    survivors = population.best(sort = "min", n = config.target_population_size)
-    survivor_ids = {ind.id for ind in survivors}
+    survivors = population.best(
+        sort="min",
+        n=config.target_population_size
+    )
+    survivor_ids = {id(ind) for ind in survivors}
 
     for ind in population:
-        ind.alive = ind.id in survivor_ids
-    
+        ind.alive = id(ind) in survivor_ids
+
     return population
 
 def get_core_position(data: mj.MjData) -> npt.NDArray[np.float64]:
@@ -238,20 +247,7 @@ def fitness_function(
     initial_position: npt.NDArray[np.float64],
     final_position: npt.NDArray[np.float64],
 ) -> float:
-    """Score one evaluation. LOWER IS BETTER.
-
-    The plain version: how far is the robot from the target when time runs out?
-
-    `initial_position` is unused here on purpose - it is passed in because the
-    moment you want a less naive fitness you will need it. Some things worth
-    thinking about (and, ideally, comparing in your report):
-      * Distance *reduced* rather than distance remaining, so a robot that
-        starts closer is not rewarded for standing still.
-      * Penalising a robot that falls over or leaves the arena.
-      * Whether the z-axis should count at all - a robot that jumps is not
-        closer to the target in any way you care about.
-    See `ariel.simulation.tasks.targeted_locomotion` for some worked variants.
-    """
+     
     target = np.asarray(TARGET_POSITION)
     return float(np.linalg.norm(final_position[:2] - target[:2]))
 
@@ -310,12 +306,14 @@ def run_experiment(weights: list[npt.NDArray[np.float64]], mode: ViewerTypes = M
     return fitness
 
 def run_ea(seed: int) -> list[float]:
-    global RNG
+    global RNG, EVAL_COUNT
+    EVAL_COUNT = 0    
     RNG = np.random.default_rng(seed)
     set_seed(seed)
 
     initial = Population([make_individual() for _ in range (config.target_population_size)])
     initial = evaluate(initial)
+    eval_history = [EVAL_COUNT]
 
     ops: list[EAOperation] = [
         EAOperation(parent_selection),
@@ -334,6 +332,7 @@ def run_ea(seed: int) -> list[float]:
     generations_without_significant_improvement = 0
     for gen in range(MAX_GENERATIONS):
         ea.step()
+        eval_history.append(EVAL_COUNT)
         best = ea.get_solution('best', only_alive = False)
 
         improvement = previous_best.fitness - best.fitness
@@ -364,18 +363,18 @@ def run_ea(seed: int) -> list[float]:
 
     best = ea.get_solution('best', only_alive=False)
     ea.engine.dispose()
-    return history
+    return history, eval_history
 
 def plotting(
-    histories_variant1: list[list[float]],
+    histories_variant3: list[list[float]],
 ) -> None:
     """
     Plots mean ± std of best fitness per generation, across independent runs.
     """
-    max_length = max(len(history) for history in histories_variant1)
+    max_length = max(len(history) for history in histories_variant3)
     padded_histories = [
         history + [history[-1]] * (max_length - len(history))
-        for history in histories_variant1
+        for history in histories_variant3
     ]
     history_array = np.array(padded_histories)
     mean_per_gen = history_array.mean(axis=0)
@@ -385,7 +384,7 @@ def plotting(
 
     fig, ax = plt.subplots(figsize=(10, 6))
 
-    ax.plot(generations, mean_per_gen, label="EA1", color="red")
+    ax.plot(generations, mean_per_gen, label="EA3", color="red")
     ax.fill_between(
         generations,
         mean_per_gen - std_per_gen,
@@ -396,9 +395,9 @@ def plotting(
 
     ax.set_xlabel("Generation")
     ax.set_ylabel("Best fitness (distance to target)")
-    ax.set_title("Convergence: EA1")
+    ax.set_title("Convergence: EA3")
     ax.legend()
-    plt.savefig(DATA / "ea1_convergence.png", dpi=300)
+    plt.savefig(DATA / "ea3_convergence.png", dpi=300)
     plt.close()
 
 def main() -> None:
@@ -406,19 +405,22 @@ def main() -> None:
     
     seeds = [42, 43, 44, 45, 46]
     all_histories: list[list[float]] = []
+    all_evals = []
 
     for seed in seeds:
-        history = run_ea(seed)
+        history, evals = run_ea(seed)
         for item in history:
             console.log(item)
         all_histories.append(history)
+        all_evals.append(evals)
 
-    with open(DATA / "histories_variant1.json", "w") as f:
+    with open(DATA / "histories_variant3.json", "w") as f:
         json.dump(all_histories, f)
+    with open(DATA / "evals_variant3.json", "w") as f:
+        json.dump(all_evals, f)
 
+    console.log(f"total evaluations per seed: {[e[-1] for e in all_evals]}")
     plotting(all_histories)
 
 if __name__ == "__main__":
     main()
-
-   
