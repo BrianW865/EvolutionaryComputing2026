@@ -9,7 +9,6 @@ import mujoco as mj
 import numpy as np
 import numpy.typing as npt
 from mujoco import viewer
-import random
 
 from ariel.ec import (
     EA,
@@ -51,6 +50,7 @@ POPULATION_SIZE: int = 100
 MAX_GENERATIONS: int = 150
 MIN_GENERATIONS: int = 50
 HIDDEN_SIZE: int = 6    #can be changed is own preference (explain!) / the hidden layer of the NN
+
 MUTATION_RATE: float = 0.4
 TOLERANCE: float = 0.01
 WINDOW_SIZE: int = 20   #number of generations without significant improvement before stopping the EA
@@ -163,17 +163,22 @@ def evaluate(population: Population) -> Population:
 
 def parent_selection(population: Population) -> Population:
     amount_of_parents: int = len(population)
-    i: int = 0
 
     for ind in population:
         ind.tags["selected"] = False
+        ind.tags["selection_count"] = 0
 
-    while i < amount_of_parents:
-        tournament_selections = random.sample(list(population), 5)
+    parents = [] 
+
+    while len(parents) < amount_of_parents:
+        tournament_selections = RNG.choice(list(population), size = 5, replace = False)
         best_one = min(tournament_selections, key=lambda individual: individual.fitness)
+        parents.append(best_one)
         best_one.tags["selected"] = True
-        i += 1
+        best_one.tags["selection_count"] = best_one.tags.get("selection_count", 0) + 1
 
+
+    population.tags["parents"] = parents
     selected_count = sum(1 for ind in population if ind.tags.get("selected", False))
     console.log(
         f"[cyan]Parent Selection: {selected_count}/{len(population)} marked for reproduction[/cyan]",
@@ -182,7 +187,10 @@ def parent_selection(population: Population) -> Population:
     return population
 
 def crossover(population: Population) -> Population:
-    parents = population.where(lambda ind: bool(ind.tags.get("selected", False)))
+    parents = population.tags.get("parents", [])
+
+    if not parents:
+        return population
 
     for idx in range(0, len(parents) - 1, 2):
         parent_1 = parents[idx]
@@ -205,8 +213,8 @@ def mutate(population: Population) -> Population:
     to_mutate = population.where(lambda ind: bool(ind.tags.get("mutate", False)))
 
     for ind in to_mutate:
-        if random.random() < MUTATION_RATE:
-            index = random.randint(0, len(ind.genotype) - 1)
+        if RNG.random() < MUTATION_RATE:
+            index = RNG.integers(0, len(ind.genotype))
             #console.log(f"mutation number before: {ind.genotype[index]}")
             mutation_addition = RNG.normal(0, 0.03)  #this is gaussian mutation!
             #console.log(f"Adding mutation_addition: {mutation_addition}")
@@ -305,8 +313,6 @@ def run_experiment(weights: list[npt.NDArray[np.float64]], mode: ViewerTypes = M
 
 def run_ea(seed: int) -> list[float]:
     global RNG
-
-    random.seed(seed)
     RNG = np.random.default_rng(seed)
     set_seed(seed)
 
@@ -352,8 +358,9 @@ def run_ea(seed: int) -> list[float]:
 
     console.log(f"--- Results (seed={seed}) ---")
     console.log(f"best = {ea.get_solution('best', only_alive=False)}")
-    console.log(f"median = {ea.get_solution('median', only_alive=False)}")
-    console.log(f"worst = {ea.get_solution('worst', only_alive=False)}")
+    console.log(f"mean = {ea.get_solution('mean', only_alive=False)}")
+    #console.log(f"median = {ea.get_solution('median', only_alive=False)}")
+    #console.log(f"worst = {ea.get_solution('worst', only_alive=False)}")
 
     console.log(f"Number of generations: {number_of_generations}")
 
@@ -398,7 +405,7 @@ def plotting(
 
 def main() -> None:
     config.target_population_size = POPULATION_SIZE
-
+    
     seeds = [42, 43, 44, 45, 46]
     all_histories: list[list[float]] = []
 
@@ -410,6 +417,7 @@ def main() -> None:
 
     with open(DATA / "histories_variant1.json", "w") as f:
         json.dump(all_histories, f)
+
     plotting(all_histories)
 
 if __name__ == "__main__":
