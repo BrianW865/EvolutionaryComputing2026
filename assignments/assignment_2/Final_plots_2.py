@@ -8,16 +8,16 @@ import matplotlib.pyplot as plt
 SCRIPT_NAME = Path(__file__).stem
 CWD = Path.cwd()
 
-with open(CWD / "__data__" / "EA_1" / "histories_variant1.json") as f:
+with open(CWD / "__data__" / "EA_1" / "histories_variant1_final.json") as f:
     histories_variant1 = json.load(f)
 
-with open(CWD / "__data__" / "EA_2" / "histories_variant2.json") as f:
+with open(CWD / "__data__" / "EA_2" / "histories_variant2_final.json") as f:
     histories_variant2 = json.load(f)
 
-with open(CWD / "__data__" / "EA_3" / "histories_variant3.json") as f:
+with open(CWD / "__data__" / "EA_3" / "histories_variant3_final.json") as f:
     histories_variant3 = json.load(f)
 
-with open(CWD / "__data__" / "A2_2026_random_search" / "histories_random_search.json") as f:
+with open(CWD / "__data__" / "A2_2026_random_search" / "histories_random_search_3_final.json") as f:
     histories_random = json.load(f)
 
 
@@ -58,7 +58,7 @@ def plotting(
             alpha=0.1,
         )
 
-    ax.set_ylim(0.8, 2.1)
+    ax.set_ylim(0.6, 2.1)
     max_generations = max(
         len(history)
         for histories in (histories_variant1, histories_variant2, histories_variant3, histories_random)

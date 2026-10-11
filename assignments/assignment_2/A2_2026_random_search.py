@@ -240,7 +240,7 @@ def main()-> None:
         console.log(f"Amount of numbers stored: {number}")
         all_histories.append(history)
 
-    with open(DATA / "histories_random_search_3.json", "w") as f:
+    with open(DATA / "histories_random_search_3_final.json", "w") as f:
         json.dump(all_histories, f)
 
     plotting(all_histories)
